@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Package installation. One flow for pacman, AUR (yay) and flatpak:
-#   1. per package: SKIPPED if installed, FAILED if not found in any source
-#   2. one bulk install of everything remaining (one long wait, not many)
-#   3. per package: SUCCESS or FAILED based on what is actually installed now
+# Package installation. One flow for pacman, AUR (yay) and flatpak, one
+# package at a time so every package gets its own honest result:
+#   SKIPPED  already installed
+#   FAILED   not found in any source, or the install ran and it is still absent
+#   SUCCESS  installed now
 #
 # Each backend provides three functions: <kind>_installed, <kind>_available, <kind>_install.
 
 install_list() {
     local kind="$1" file="$2"
-    local -a pkgs=() want=()
+    local -a pkgs=()
     mapfile -t pkgs < <(read_list "$file")
 
     local p
@@ -18,25 +19,13 @@ install_list() {
         elif ! "${kind}_available" "$p"; then
             status "$p" FAILED "not found"
         else
-            want+=("$p")
-        fi
-    done
-
-    [[ ${#want[@]} -gt 0 ]] || return 0
-
-    note "installing: ${want[*]}"
-    local out reason
-    out="$(mktemp)"
-    "${kind}_install" "${want[@]}" 2>&1 | tee "$out" || true
-    cat "$out" >> "$LOG_FILE"
-    reason="$(grep -iE 'error|fail|not found' "$out" | tail -n 1 | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-80 || true)"
-    rm -f "$out"
-
-    for p in "${want[@]}"; do
-        if "${kind}_installed" "$p"; then
-            status "$p" SUCCESS
-        else
-            status "$p" FAILED "${reason:-see log}"
+            note "installing: $p"
+            run_logged "${kind}_install" "$p" || true
+            if "${kind}_installed" "$p"; then
+                status "$p" SUCCESS
+            else
+                status "$p" FAILED "${RUN_LAST_LINE:-see log}"
+            fi
         fi
     done
 }

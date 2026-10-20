@@ -11,18 +11,33 @@ DIM='\033[2m'
 BANNER='\033[30;47m'   # black on white (ANSI 16, follows the terminal theme)
 RESET='\033[0m'
 
-LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/linux-bootstrapper"
+LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/cachyup"
 STATUS_WIDTH=44
-
-# Status lines look like "name.....RESULT" with at least 3 dots; this pattern
-# is what summary() counts, so command output cannot be mistaken for a status.
-STATUS_RE='\.\.\.(SUCCESS|SKIPPED|FAILED|PASS)( \(|$)'
 
 log_init() {
     mkdir -p "$LOG_DIR"
     LOG_FILE="$LOG_DIR/$(date +%Y%m%d-%H%M%S).log"
     : > "$LOG_FILE"
-    export LOG_FILE
+    # Private scratch file: only headings and status lines go here, so the
+    # end-of-run summary never has to parse command output. Removed on exit.
+    SUMMARY_FILE="$(mktemp)"
+    trap cleanup EXIT
+    trap on_interrupt INT
+    export LOG_FILE SUMMARY_FILE
+}
+
+on_interrupt() {
+    echo
+    echo -e "${RED}Interrupted.${RESET} Log: $LOG_FILE"
+    printf '\nINTERRUPTED (Ctrl-C)\n' >> "$LOG_FILE"
+    exit 130
+}
+
+# The one EXIT trap. Anything that needs tearing down at exit goes here.
+cleanup() {
+    rm -f "$SUMMARY_FILE"
+    [[ -n "${SUDO_KEEPALIVE_PID:-}" ]] && kill "$SUDO_KEEPALIVE_PID" 2>/dev/null
+    return 0
 }
 
 # Phase heading.
@@ -30,6 +45,7 @@ heading() {
     echo
     echo -e "${BOLD}==> $1${RESET}"
     printf '\n==> %s\n' "$1" >> "$LOG_FILE"
+    printf 'H\t%s\n' "$1" >> "$SUMMARY_FILE"
 }
 
 # Full-width coloured divider line, e.g. before the summary.
@@ -70,32 +86,43 @@ status() {
 
     echo -e "${name}${dots}${colour}${result}${RESET}${suffix}"
     printf '%s%s%s%s\n' "$name" "$dots" "$result" "$suffix" >> "$LOG_FILE"
+    printf 'S\t%s\t%s%s%s%s\n' "$result" "$name" "$dots" "$result" "$suffix" >> "$SUMMARY_FILE"
 }
 
-# step NAME CHECK_CMD ACTION_CMD
-#   If CHECK_CMD succeeds the step is SKIPPED.
-#   Otherwise ACTION_CMD runs with its output streamed to screen and log,
-#   and the step is SUCCESS or FAILED (reason = last line of output).
+# run_logged CMD [ARGS...]
+#   Runs the command with its output streamed to the screen and appended to the
+#   log as it happens (so nothing is lost on Ctrl-C). Sets RUN_LAST_LINE to the
+#   last non-empty line of output, for FAILED reasons. Returns the command's
+#   exit status.
+RUN_LAST_LINE=""
+run_logged() {
+    local out rc=0
+    out="$(mktemp)"
+    "$@" 2>&1 | tee -a "$out" "$LOG_FILE" || rc=$?
+    RUN_LAST_LINE="$(last_line "$out")"
+    rm -f "$out"
+    return "$rc"
+}
+
+# step NAME CHECK_FN ACTION_FN
+#   CHECK_FN and ACTION_FN are function (or command) names, called with no
+#   arguments. Wrap anything that needs arguments or quoting in a function.
+#   If CHECK_FN succeeds the step is SKIPPED. Otherwise ACTION_FN runs and the
+#   step is SUCCESS or FAILED (reason = last line of output).
 step() {
     local name="$1" check="$2" action="$3"
 
-    if $check; then
+    if "$check"; then
         status "$name" SKIPPED "already present"
         return 0
     fi
 
     note "running: $name"
-    local out
-    out="$(mktemp)"
-
-    if $action 2>&1 | tee "$out"; then
-        cat "$out" >> "$LOG_FILE"
+    if run_logged "$action"; then
         status "$name" SUCCESS
     else
-        cat "$out" >> "$LOG_FILE"
-        status "$name" FAILED "$(last_line "$out")"
+        status "$name" FAILED "$RUN_LAST_LINE"
     fi
-    rm -f "$out"
 }
 
 # Last non-empty line of a file, ANSI stripped, trimmed, truncated.
@@ -104,21 +131,22 @@ last_line() {
         | sed 's/^[[:space:]]*//' | cut -c1-80
 }
 
-# End-of-run recap: every heading and status line from the log again, back to
-# back with no command output between them, then counts. Tells the user whether
-# the log is worth opening.
+# End-of-run recap: every heading and status line again, back to back with no
+# command output between them, then counts. PASS lines are shown but not
+# counted, so "N succeeded" only ever means something was installed or changed.
 summary() {
     local ok skip fail
-    ok=$(grep -cE "${STATUS_RE/(SUCCESS|SKIPPED|FAILED|PASS)/SUCCESS}" "$LOG_FILE" || true)
-    skip=$(grep -cE "${STATUS_RE/(SUCCESS|SKIPPED|FAILED|PASS)/SKIPPED}" "$LOG_FILE" || true)
-    fail=$(grep -cE "${STATUS_RE/(SUCCESS|SKIPPED|FAILED|PASS)/FAILED}" "$LOG_FILE" || true)
+    ok=$(grep -c $'^S\tSUCCESS\t' "$SUMMARY_FILE" || true)
+    skip=$(grep -c $'^S\tSKIPPED\t' "$SUMMARY_FILE" || true)
+    fail=$(grep -c $'^S\tFAILED\t' "$SUMMARY_FILE" || true)
 
     echo
     banner "==> Summary"
-    grep -E "^==> |${STATUS_RE}" "$LOG_FILE" | while IFS= read -r line; do
-        if [[ "$line" == "==> "* ]]; then
+    local kind result line
+    while IFS=$'\t' read -r kind result line; do
+        if [[ "$kind" == "H" ]]; then
             echo
-            echo -e "${BOLD}${line}${RESET}"
+            echo -e "${BOLD}==> ${result}${RESET}"
         else
             line="${line/.SUCCESS/.${GREEN}SUCCESS${RESET}}"
             line="${line/.PASS/.${GREEN}PASS${RESET}}"
@@ -126,7 +154,7 @@ summary() {
             line="${line/.FAILED/.${RED}FAILED${RESET}}"
             echo -e "$line"
         fi
-    done
+    done < "$SUMMARY_FILE"
 
     echo
     echo -e "${GREEN}${ok} succeeded${RESET}, ${YELLOW}${skip} skipped${RESET}, ${RED}${fail} failed${RESET}"
@@ -140,10 +168,10 @@ summary() {
 }
 
 on_unexpected_error() {
-    local line="$1" cmd="$2"
+    local file="$1" line="$2" cmd="$3"
     echo
-    echo -e "${RED}Unexpected error at line $line: $cmd${RESET}"
-    printf '\nABORTED: unexpected error at line %s: %s\n' "$line" "$cmd" >> "$LOG_FILE"
+    echo -e "${RED}Unexpected error in ${file##*/} line $line: $cmd${RESET}"
+    printf '\nABORTED: unexpected error in %s line %s: %s\n' "${file##*/}" "$line" "$cmd" >> "$LOG_FILE"
     echo "Log: $LOG_FILE"
     exit 1
 }

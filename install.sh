@@ -11,7 +11,7 @@ for lib in "$BOOTSTRAP_DIR"/lib/*.sh; do
 done
 
 log_init
-trap 'on_unexpected_error $LINENO "$BASH_COMMAND"' ERR
+trap 'on_unexpected_error "${BASH_SOURCE[0]}" "$LINENO" "$BASH_COMMAND"' ERR
 
 for phase in "$BOOTSTRAP_DIR"/phases/*.sh; do
     source "$phase"
