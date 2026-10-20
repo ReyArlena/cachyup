@@ -11,7 +11,7 @@ back to a summary.
 Fresh machine:
 
 ```bash
-bash <(curl -fsSL https://reyarlena.github.io/cachyup/boot.sh)
+curl -fsSL https://reyarlena.github.io/cachyup/boot.sh | bash
 ```
 
 This clones the repo to `~/.local/share/cachyup`, runs `install.sh`, and puts a `cachyup`
