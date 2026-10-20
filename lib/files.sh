@@ -37,3 +37,48 @@ json_set() {
     rm -f "$tmp"
     return "$rc"
 }
+
+# ini_set FILE SECTION KEY VALUE
+#   Sets KEY=VALUE under [SECTION] in an ini-style file (mimeapps.list, .desktop
+#   files, ...). Replaces the key if present in that section, appends it to the
+#   section otherwise, creates the section (and file) if missing. Writes via
+#   write_file so symlinks are honoured. Comments and other sections untouched.
+ini_set() {
+    local file="$1" section="$2" key="$3" value="$4" tmp
+    tmp="$(mktemp)"
+    if [[ -f "$file" ]]; then
+        awk -v s="[$section]" -v k="$key" -v v="$value" '
+            BEGIN { insec = 0; done = 0 }
+            /^\[/ {
+                if (insec && !done) { print k "=" v; done = 1 }
+                insec = ($0 == s)
+                print; next
+            }
+            insec && substr($0, 1, length(k) + 1) == k "=" {
+                if (!done) { print k "=" v; done = 1 }
+                next
+            }
+            { print }
+            END {
+                if (!done) {
+                    if (!insec) { if (NR > 0) print ""; print s }
+                    print k "=" v
+                }
+            }
+        ' "$file" > "$tmp"
+    else
+        printf '[%s]\n%s=%s\n' "$section" "$key" "$value" > "$tmp"
+    fi
+    write_file "$file" < "$tmp"
+    rm -f "$tmp"
+}
+
+# ini_get FILE SECTION KEY   -> prints the value, or nothing if absent
+ini_get() {
+    local file="$1" section="$2" key="$3"
+    [[ -f "$file" ]] || return 0
+    awk -v s="[$section]" -v k="$key" '
+        /^\[/ { insec = ($0 == s); next }
+        insec && substr($0, 1, length(k) + 1) == k "=" { print substr($0, length(k) + 2); exit }
+    ' "$file"
+}

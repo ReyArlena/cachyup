@@ -75,7 +75,7 @@ Phases live in `phases/` and run in filename order.
 | Phase | What it does |
 |-------|--------------|
 | `10-preflight.sh` | Not root, CachyOS, internet, sudo, PATH. Then `pacman -Syu`, the tools the script itself needs, and the `cachyup` command. |
-| `20-packages.sh` | Pacman, then AUR (yay), then Flatpak (flathub). All the long waits. |
+| `20-packages.sh` | Pacman, then AUR (yay), then Flatpak (flathub), then conditional packages. All the long waits. |
 | `30-installers.sh` | Apps with their own install script, e.g. Claude Code. |
 | `40-config.sh` | Static config tweaks, e.g. Discord no self-update. |
 | `90-finish.sh` | Summary, log path, the only prompt. |
@@ -101,6 +101,26 @@ own honest result and reason.
 Real package names only. Groups (`gnome`) and virtual names (`jack`) are not resolved and
 show as not found.
 
+### A conditional package
+
+A package that should only be installed in some situations gets a script in `conditional/`
+instead of a line in a list. Same shape as an installer (below), using the package helpers
+from `lib/pkg.sh`. Set `SKIP_REASON` in `check()` to say why it was skipped:
+
+```bash
+NAME="junction (pacman)"
+check() {
+    pacman_installed junction && return 0
+    has_cmd dms && { SKIP_REASON="using DMS Open"; return 0; }
+    return 1
+}
+run() { pacman_install junction; }
+```
+
+```
+junction (pacman)...........................SKIPPED (using DMS Open)
+```
+
 ### An installer or a config tweak
 
 Add a file to `installers/` or `config/`. It is sourced in a subshell and must define:
@@ -108,13 +128,15 @@ Add a file to `installers/` or `config/`. It is sourced in a subshell and must d
 ```bash
 NAME="Thing"            # label for the status line
 check() { ...; }        # exit 0 if already done  ->  SKIPPED
+                        #   set SKIP_REASON first to replace "already present"
 run()   { ...; }        # do it; non-zero exit    ->  FAILED (last line of output)
 ```
 
-Everything in `lib/` is available: `has_cmd`, `json_get`, `json_set`, `write_file`,
-`copy_file`, `read_list`, `status`, `note`. See `installers/claude.sh` and `config/discord.sh`.
+Everything in `lib/` is available: `has_cmd`, `json_get`, `json_set`, `ini_get`, `ini_set`,
+`write_file`, `copy_file`, `read_list`, `status`, `note`. See `installers/claude.sh` and `config/discord.sh`.
 
-Writing files: use `write_file FILE` (content on stdin), `copy_file SRC DST` or `json_set`.
+Writing files: use `write_file FILE` (content on stdin), `copy_file SRC DST`, `json_set` or
+`ini_set`.
 They create parent directories and write *through* symlinks, so a stow-managed file stays a
 symlink and the change lands in the dotfiles repo. Never `mv`, `install` or `ln -sf` over an
 existing path; those replace the link with a plain file. No backups are made: this tool is
@@ -156,10 +178,11 @@ boot.sh          entry point: clone or update the repo, then exec install.sh
 install.sh       loads lib/, runs phases/ in order
 lib/log.sh       status lines, step(), log file, summary
 lib/utils.sh     require/check, sudo keepalive, read_list, run_scripts
-lib/files.sh     write_file, copy_file, json_get, json_set
+lib/files.sh     write_file, copy_file, json_get, json_set, ini_get, ini_set
 lib/pkg.sh       install_list + pacman/aur/flatpak backends
 phases/          ordered stages
 packages/        package list files
+conditional/     NAME/check/run scripts for packages with an install condition
 installers/      NAME/check/run scripts for curl-style installers
 config/          NAME/check/run scripts for config tweaks
 ```

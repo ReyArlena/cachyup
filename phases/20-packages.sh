@@ -18,3 +18,6 @@ if has_cmd flatpak; then
 else
     status "Flatpaks" FAILED "flatpak not installed"
 fi
+
+heading "Conditional packages"
+run_scripts "$BOOTSTRAP_DIR/conditional"

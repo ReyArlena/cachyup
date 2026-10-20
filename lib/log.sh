@@ -107,13 +107,16 @@ run_logged() {
 # step NAME CHECK_FN ACTION_FN
 #   CHECK_FN and ACTION_FN are function (or command) names, called with no
 #   arguments. Wrap anything that needs arguments or quoting in a function.
-#   If CHECK_FN succeeds the step is SKIPPED. Otherwise ACTION_FN runs and the
-#   step is SUCCESS or FAILED (reason = last line of output).
+#   If CHECK_FN succeeds the step is SKIPPED. A check may set SKIP_REASON before
+#   returning 0 to replace the default "already present" (e.g. "using DMS Open").
+#   Otherwise ACTION_FN runs and the step is SUCCESS or FAILED (reason = last
+#   line of output).
 step() {
     local name="$1" check="$2" action="$3"
 
+    SKIP_REASON=""
     if "$check"; then
-        status "$name" SKIPPED "already present"
+        status "$name" SKIPPED "${SKIP_REASON:-already present}"
         return 0
     fi
 
