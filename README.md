@@ -9,12 +9,13 @@ so you can start it, go and make tea, and come back to a summary.
 Fresh machine:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/ReyArlena/linux-bootstrapper/main/boot.sh)
+bash <(curl -fsSL https://reyarlena.github.io/linux-bootstrapper/boot.sh)
 ```
 
 This clones the repo to `~/.local/share/linux-bootstrapper` (or updates it if present) and
-runs `install.sh`. You are asked for your sudo password once at the start. Nothing else needs
-input until the end.
+runs `install.sh`.
+
+You are asked for your sudo password once at the start. Nothing else needs input until the end.
 
 Re-run later from the clone:
 

@@ -1,3 +1,4 @@
 # AUR packages, installed with yay.
+amethyst-mod-manager
 discord-ptb
 spotify

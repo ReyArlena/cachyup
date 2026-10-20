@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Remote entry point. Clones (or updates) the repo, then hands off to install.sh.
 #
-#   bash <(curl -fsSL https://raw.githubusercontent.com/ReyArlena/linux-bootstrapper/main/boot.sh)
+#   bash <(curl -fsSL https://reyarlena.github.io/linux-bootstrapper/boot.sh)
 #
 # Also works with `curl ... | bash`: stdin is re-attached to the terminal before
 # install.sh runs so prompts (sudo password, key presses) still work.
