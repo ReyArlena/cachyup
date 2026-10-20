@@ -11,10 +11,10 @@ back to a summary.
 Fresh machine:
 
 ```bash
-curl -fsSL https://reyarlena.github.io/cachyup/boot.sh | bash
+curl -fsSL https://reyarlena.github.io/cachyup/install.sh | bash
 ```
 
-This clones the repo to `~/.local/share/cachyup`, runs `install.sh`, and puts a `cachyup`
+This clones the repo to `~/.local/share/cachyup`, runs `run.sh`, and puts a `cachyup`
 command on your PATH. You are asked for your sudo password once at the start. Nothing else
 needs input until the end.
 
@@ -24,8 +24,8 @@ Every run after that:
 cachyup
 ```
 
-`cachyup` is a symlink at `~/.local/bin/cachyup` pointing at `boot.sh` inside the clone.
-`boot.sh` pulls the latest version of the repo and runs `install.sh`, so a plain `cachyup`
+`cachyup` is a symlink at `~/.local/bin/cachyup` pointing at `install.sh` inside the clone.
+`install.sh` pulls the latest version of the repo and runs `run.sh`, so a plain `cachyup`
 is "update the system and apply whatever changed in the lists". Preflight checks that
 `~/.local/bin` is on your PATH and reports FAILED if not; the link is still created.
 
@@ -46,7 +46,8 @@ discord.....................................SKIPPED (already present)
 flatpak.....................................SUCCESS
 
 ==> AUR packages
-spotify.....................................FAILED (not found)
+spotify.....................................SUCCESS
+spotfiy.....................................FAILED (not found)
 
 ==> Installers
 Claude Code.................................SKIPPED (already present)
@@ -54,7 +55,7 @@ Claude Code.................................SKIPPED (already present)
  ==> Summary
    (every heading and status line again, with nothing in between)
 
-2 succeeded, 2 skipped, 1 failed
+3 succeeded, 2 skipped, 1 failed
 Command output for each failure is in the log, directly above its FAILED line.
 
 Log: ~/.local/state/cachyup/20261020-221500.log
@@ -133,25 +134,25 @@ run()   { ...; }        # do it; non-zero exit    ->  FAILED (last line of outpu
 ```
 
 Everything in `lib/` is available: `has_cmd`, `json_get`, `json_set`, `ini_get`, `ini_set`,
-`write_file`, `copy_file`, `read_list`, `status`, `note`. See `installers/claude.sh` and `config/discord.sh`.
+`write_file`, `copy_file`, `read_list`, `status`, `note`. See `installers/claude.sh`,
+`config/discord.sh` and `config/junction-default.sh`.
 
 Writing files: use `write_file FILE` (content on stdin), `copy_file SRC DST`, `json_set` or
-`ini_set`.
-They create parent directories and write *through* symlinks, so a stow-managed file stays a
-symlink and the change lands in the dotfiles repo. Never `mv`, `install` or `ln -sf` over an
-existing path; those replace the link with a plain file. No backups are made: this tool is
-meant for fresh systems.
+`ini_set`. They create parent directories and write *through* symlinks, so a stow-managed
+file stays a symlink and the change lands in the dotfiles repo. Never `mv`, `install` or
+`ln -sf` over an existing path; those replace the link with a plain file. No backups are
+made: this tool is meant for fresh systems.
 
 Rules for `check()`: test the actual end state (binary exists, key has the right value), not
 whether the script ran before. That is what makes re-runs safe.
 
 ### A new phase
 
-Add `phases/NN-name.sh`. It is sourced by `install.sh` with all of `lib/` loaded. Use
+Add `phases/NN-name.sh`. It is sourced by `run.sh` with all of `lib/` loaded. Use
 `heading` once at the top, then:
 
-- `step NAME CHECK_FN ACTION_FN` for one thing. Both arguments are function names called with
-  no arguments; wrap anything needing arguments or quotes in a small function.
+- `step NAME CHECK_FN ACTION_FN` for one thing. `CHECK_FN` and `ACTION_FN` are function names
+  called with no arguments; wrap anything needing arguments or quotes in a small function.
 - `install_list KIND FILE` for a package list.
 - `run_scripts DIR` for a directory of `NAME`/`check`/`run` scripts.
 - `require NAME CHECK_FN MSG` for a check that must pass (aborts), `check NAME CHECK_FN MSG`
@@ -174,8 +175,8 @@ Add `phases/NN-name.sh`. It is sourced by `install.sh` with all of `lib/` loaded
 ## Layout
 
 ```
-boot.sh          entry point: clone or update the repo, then exec install.sh
-install.sh       loads lib/, runs phases/ in order
+install.sh       entry point: clone or update the repo, then exec run.sh
+run.sh           loads lib/, runs phases/ in order
 lib/log.sh       status lines, step(), log file, summary
 lib/utils.sh     require/check, sudo keepalive, read_list, run_scripts
 lib/files.sh     write_file, copy_file, json_get, json_set, ini_get, ini_set

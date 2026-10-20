@@ -19,15 +19,15 @@ step "pacman -Syu" false system_update
 heading "Prerequisites"
 install_list pacman "$BOOTSTRAP_DIR/packages/prerequisites.txt"
 
-# `cachyup` on PATH: a symlink to boot.sh inside this clone, so every later run
-# is just `cachyup` (boot.sh pulls the latest and runs install.sh).
+# `cachyup` on PATH: a symlink to install.sh inside this clone, so every later run
+# is just `cachyup` (install.sh pulls the latest and runs run.sh).
 CACHYUP_LINK="$HOME/.local/bin/cachyup"
-cachyup_linked() { [[ "$(readlink -f "$CACHYUP_LINK" 2>/dev/null)" == "$BOOTSTRAP_DIR/boot.sh" ]]; }
+cachyup_linked() { [[ "$(readlink -f "$CACHYUP_LINK" 2>/dev/null)" == "$BOOTSTRAP_DIR/install.sh" ]]; }
 cachyup_link() {
     if [[ -e "$CACHYUP_LINK" && ! -L "$CACHYUP_LINK" ]]; then
         echo "$CACHYUP_LINK exists and is not a symlink, not replacing it"
         return 1
     fi
-    mkdir -p "$HOME/.local/bin" && ln -sfn "$BOOTSTRAP_DIR/boot.sh" "$CACHYUP_LINK"
+    mkdir -p "$HOME/.local/bin" && ln -sfn "$BOOTSTRAP_DIR/install.sh" "$CACHYUP_LINK"
 }
 step "Install global cachyup command" cachyup_linked cachyup_link
