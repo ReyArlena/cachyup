@@ -1,0 +1,2 @@
+# Flathub application IDs.
+io.github.ebonjaeger.bluejay

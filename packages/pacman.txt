@@ -1,0 +1,6 @@
+# Official + CachyOS repo packages. One per line, # comments allowed.
+discord
+flatpak
+fuse2
+gradia
+stow

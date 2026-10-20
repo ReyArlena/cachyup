@@ -1,0 +1,5 @@
+# Installed before everything else. Needed by the script itself.
+base-devel   # makepkg, for AUR builds
+git
+jq           # json config edits
+yay          # AUR helper (cachyos repo)
