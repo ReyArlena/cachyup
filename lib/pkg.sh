@@ -6,9 +6,6 @@
 #   SUCCESS  installed now
 #
 # Each backend provides three functions: <kind>_installed, <kind>_available, <kind>_install.
-# AUR_FAILED is set when any AUR install fails, so cleanup keeps yay's cache
-# (downloaded sources, built packages) for the retry.
-AUR_FAILED=0
 
 install_list() {
     local kind="$1" file="$2"
@@ -32,7 +29,6 @@ install_list() {
                 status "$p" SUCCESS
             else
                 status "$p" FAILED "${RUN_LAST_LINE:-see log}"
-                [[ "$kind" == aur ]] && AUR_FAILED=1
             fi
         fi
     done

@@ -16,17 +16,23 @@ cache_tidy()  { [[ "$(cache_candidates)" -eq 0 ]] && { SKIP_REASON="nothing to p
 cache_prune() { sudo paccache -rk2 && sudo paccache -ruk0; }
 step "Package cache" cache_tidy cache_prune
 
-# Keep the cache if anything AUR failed this run: it holds the downloads and
-# built packages the retry would otherwise redo from scratch.
-yay_cache_empty() {
-    if (( AUR_FAILED )) || grep -q $'^S\tFAILED\tyay -Sua' "$SUMMARY_FILE"; then
-        SKIP_REASON="kept, an AUR step failed this run"; return 0
-    fi
-    [[ -z "$(ls -A "$HOME/.cache/yay" 2>/dev/null)" ]] && { SKIP_REASON="empty"; return 0; }
+# yay keeps every downloaded source and built package. Prune by age rather
+# than wiping, so a rebuild or retry right after a run still has its files.
+YAY_CACHE="$HOME/.cache/yay"
+YAY_CACHE_KEEP_DAYS=30
+yay_cache_tidy() {
+    [[ -d "$YAY_CACHE" ]] || { SKIP_REASON="empty"; return 0; }
+    [[ -z "$(find "$YAY_CACHE" -type f -mtime +"$YAY_CACHE_KEEP_DAYS" -print -quit)" ]] \
+        && { SKIP_REASON="nothing older than ${YAY_CACHE_KEEP_DAYS}d"; return 0; }
     return 1
 }
-yay_cache_clear() { du -sh "$HOME/.cache/yay" && rm -rf "$HOME/.cache/yay"/*; }
-step "yay build cache" yay_cache_empty yay_cache_clear
+yay_cache_prune() {
+    du -sh "$YAY_CACHE"
+    find "$YAY_CACHE" -type f -mtime +"$YAY_CACHE_KEEP_DAYS" -delete
+    find "$YAY_CACHE" -mindepth 1 -type d -empty -delete
+    du -sh "$YAY_CACHE"
+}
+step "yay build cache (older than ${YAY_CACHE_KEEP_DAYS}d)" yay_cache_tidy yay_cache_prune
 
 # flatpak has no dry run; answering "n" to the prompt lists what it would remove.
 flatpak_unused_none()   { echo n | flatpak uninstall --unused 2>&1 | grep -q 'Nothing unused' && { SKIP_REASON="none"; return 0; }; return 1; }
@@ -74,17 +80,30 @@ no_stale_services() {
 check "No services need a restart" no_stale_services "see above"
 
 # Started in the background by 10-preflight.sh after the AUR update.
+# Packages that just repack upstream binaries cannot be fixed by a rebuild
+# (same tarball in, same package out); they are listed but not advised.
+PREBUILT_PATTERNS=( '*-bin' '*-appimage' 'phpstorm' 'goland' 'rustrover' 'clion' 'datagrip' 'webstorm' 'rider' 'pycharm*' 'intellij*' 'google-chrome' 'spotify' 'discord-ptb' )
+is_prebuilt() {
+    local pat
+    for pat in "${PREBUILT_PATTERNS[@]}"; do [[ "$1" == $pat ]] && return 0; done
+    return 1
+}
 no_rebuilds() {
     [[ -n "${REBUILD_PID:-}" ]] || { CHECK_REASON="checkrebuild not installed"; return 1; }
     if kill -0 "$REBUILD_PID" 2>/dev/null; then
         note "waiting for checkrebuild to finish"
         wait "$REBUILD_PID" || true
     fi
-    local -a pkgs=()
-    mapfile -t pkgs < <(awk '{print $2}' "$REBUILD_OUT")
+    local -a flagged=() rebuild=() prebuilt=()
+    mapfile -t flagged < <(awk '{print $2}' "$REBUILD_OUT")
     rm -f "$REBUILD_OUT"
-    [[ ${#pkgs[@]} -eq 0 ]] && return 0
-    CHECK_REASON="rebuild with: yay -S --rebuild ${pkgs[*]}"
+    local p
+    for p in "${flagged[@]}"; do
+        if is_prebuilt "$p"; then prebuilt+=("$p"); else rebuild+=("$p"); fi
+    done
+    [[ ${#prebuilt[@]} -gt 0 ]] && note "flagged but prebuilt, a rebuild cannot help, wait for upstream: ${prebuilt[*]}"
+    [[ ${#rebuild[@]} -eq 0 ]] && return 0
+    CHECK_REASON="rebuild with: yay -S --rebuild ${rebuild[*]}"
     return 1
 }
 check "AUR packages up to date with libraries" no_rebuilds "see above"

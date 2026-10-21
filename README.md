@@ -99,7 +99,7 @@ Phases live in `phases/` and run in filename order.
 | `20-packages.sh` | Pacman, then AUR (yay), then Flatpak (flathub), then conditional packages. All the long waits. |
 | `30-installers.sh` | Apps with their own install script, e.g. Claude Code. |
 | `40-config.sh` | Static config tweaks, e.g. Discord no self-update. |
-| `80-cleanup.sh` | Orphans, package cache (keeps 2 versions of installed, none of uninstalled), yay build cache, unused flatpak runtimes. Then checks: `.pacnew` files, reboot needed, services needing a restart, AUR rebuilds. |
+| `80-cleanup.sh` | Orphans, package cache (keeps 2 versions of installed, none of uninstalled), yay build cache older than 30 days, unused flatpak runtimes. Then checks: `.pacnew` files, reboot needed, services needing a restart, AUR rebuilds. |
 | `90-finish.sh` | Summary, log path, the only prompt. |
 
 ## Adding things
@@ -223,6 +223,9 @@ Add `phases/NN-name.sh`. It is sourced by `run.sh` with all of `lib/` loaded. Us
   a kernel update is reported for you to reboot, services running replaced binaries come with
   the `systemctl restart` line, and AUR rebuilds with the `yay` line. `checkrebuild` is slow,
   so it starts in the background after the AUR update and its result is collected at the end.
+  Packages that only repack upstream binaries (`-bin`, AppImages, the JetBrains IDEs, Chrome,
+  Spotify, Discord PTB) are listed but not advised: rebuilding them changes nothing. The list
+  of such names is `PREBUILT_PATTERNS` in `phases/80-cleanup.sh`.
 - The update and cleanup steps mirror what CachyOS's own `cachy-update` does interactively
   (a fork of Arch-Update), minus the questions. `cachy-update` itself is in `pacman.txt`; its
   package autostarts the tray applet system-wide, for day-to-day updates between `cachyup`
