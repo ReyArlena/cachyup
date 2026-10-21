@@ -16,20 +16,39 @@ cache_tidy()  { [[ "$(cache_candidates)" -eq 0 ]] && { SKIP_REASON="nothing to p
 cache_prune() { sudo paccache -rk2 && sudo paccache -ruk0; }
 step "Package cache" cache_tidy cache_prune
 
-# yay keeps every downloaded source and built package. Prune by age rather
-# than wiping, so a rebuild or retry right after a run still has its files.
+# yay keeps a git clone per AUR package under ~/.cache/yay, with sources and
+# built packages inside. Prune whole package dirs, never single files: deleting
+# old files out of a clone leaves a dir without .git, and yay's next fetch of
+# that package fails with "destination path already exists". A dir goes when
+# nothing in it was touched for KEEP_DAYS (so a rebuild or retry right after a
+# run still has its files), or when its clone is already broken.
 YAY_CACHE="$HOME/.cache/yay"
 YAY_CACHE_KEEP_DAYS=30
+yay_cache_stale_dirs() {
+    local d
+    for d in "$YAY_CACHE"/*/; do
+        d="${d%/}"
+        [[ -d "$d" ]] || continue
+        if [[ ! -d "$d/.git" ]]; then
+            echo "$d"
+        elif [[ -z "$(find "$d" -mtime -"$YAY_CACHE_KEEP_DAYS" -print -quit)" ]]; then
+            echo "$d"
+        fi
+    done
+}
 yay_cache_tidy() {
     [[ -d "$YAY_CACHE" ]] || { SKIP_REASON="empty"; return 0; }
-    [[ -z "$(find "$YAY_CACHE" -type f -mtime +"$YAY_CACHE_KEEP_DAYS" -print -quit)" ]] \
+    [[ -z "$(yay_cache_stale_dirs)" ]] \
         && { SKIP_REASON="nothing older than ${YAY_CACHE_KEEP_DAYS}d"; return 0; }
     return 1
 }
 yay_cache_prune() {
     du -sh "$YAY_CACHE"
-    find "$YAY_CACHE" -type f -mtime +"$YAY_CACHE_KEEP_DAYS" -delete
-    find "$YAY_CACHE" -mindepth 1 -type d -empty -delete
+    local d
+    while IFS= read -r d; do
+        [[ -d "$d/.git" ]] && echo "stale: ${d##*/}" || echo "broken clone: ${d##*/}"
+        rm -rf -- "$d"
+    done < <(yay_cache_stale_dirs)
     du -sh "$YAY_CACHE"
 }
 step "yay build cache (older than ${YAY_CACHE_KEEP_DAYS}d)" yay_cache_tidy yay_cache_prune
