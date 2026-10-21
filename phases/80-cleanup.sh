@@ -60,6 +60,39 @@ if has_cmd flatpak; then
     step "Unused flatpak runtimes" flatpak_unused_none flatpak_unused_remove
 fi
 
+# cachyos-rate-mirrors rewrites these four files on every rating, so a .pacnew
+# for one of them is just the package's static default list: nothing to merge,
+# the rating already tests the live mirror list from the CachyOS API. Only a
+# .pacnew whose live file carries the rate-mirrors header is dropped, proof the
+# file is generated and not hand-edited; anything else stays for pacdiff.
+RATED_MIRRORLISTS=(
+    /etc/pacman.d/mirrorlist
+    /etc/pacman.d/cachyos-mirrorlist
+    /etc/pacman.d/cachyos-v3-mirrorlist
+    /etc/pacman.d/cachyos-v4-mirrorlist
+)
+rated_mirrorlist_pacnews() {
+    has_cmd cachyos-rate-mirrors || return 0
+    local f
+    for f in "${RATED_MIRRORLISTS[@]}"; do
+        [[ -f "$f.pacnew" ]] || continue
+        grep -q '^# ARGS: rate-mirrors ' "$f" 2>/dev/null && echo "$f.pacnew"
+    done
+    return 0
+}
+mirrorlist_pacnew_none() {
+    [[ -z "$(rated_mirrorlist_pacnews)" ]] && { SKIP_REASON="none"; return 0; }
+    return 1
+}
+mirrorlist_pacnew_remove() {
+    local f
+    while IFS= read -r f; do
+        echo "dropping $f: live file is rate-mirrors output"
+        sudo rm -- "$f"
+    done < <(rated_mirrorlist_pacnews)
+}
+step "Rated mirrorlist .pacnew files" mirrorlist_pacnew_none mirrorlist_pacnew_remove
+
 heading "Post-update checks"
 
 no_pacnew() {
