@@ -219,7 +219,7 @@ Add `phases/NN-name.sh`. It is sourced by `run.sh` with all of `lib/` loaded. Us
   the AUR phase if one is ever needed.
 - The sudo ticket is refreshed in the background for the whole run, so a long AUR build does
   not leave a password prompt waiting for you.
-- The post-update checks never act on their own. `.pacnew` files are listed for `sudo pacdiff`,
+- The post-update checks never act on their own. `.pacnew` files are listed for `pacdiff --sudo`,
   a kernel update is reported for you to reboot, services running replaced binaries come with
   the `systemctl restart` line, and AUR rebuilds with the `yay` line. `checkrebuild` is slow,
   so it starts in the background after the AUR update and its result is collected at the end.

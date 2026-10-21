@@ -47,7 +47,7 @@ no_pacnew() {
     local -a files=()
     mapfile -t files < <(pacdiff -o 2>/dev/null)
     [[ ${#files[@]} -eq 0 ]] && return 0
-    CHECK_REASON="${#files[@]} to merge, run: sudo DIFFPROG=meld pacdiff"
+    CHECK_REASON="${#files[@]} to merge, run: DIFFPROG=meld pacdiff --sudo"
     local f; for f in "${files[@]}"; do note "$f"; done
     return 1
 }
