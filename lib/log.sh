@@ -34,10 +34,12 @@ on_interrupt() {
 }
 
 # The one EXIT trap. Anything that needs tearing down at exit goes here.
+# Nothing in here may trip the ERR trap: a dead process is fine.
 cleanup() {
+    trap - ERR
     rm -f "$SUMMARY_FILE" "${REBUILD_OUT:-}"
-    [[ -n "${SUDO_KEEPALIVE_PID:-}" ]] && kill "$SUDO_KEEPALIVE_PID" 2>/dev/null
-    [[ -n "${REBUILD_PID:-}" ]] && kill "$REBUILD_PID" 2>/dev/null
+    [[ -n "${SUDO_KEEPALIVE_PID:-}" ]] && { kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true; }
+    [[ -n "${REBUILD_PID:-}" ]] && { kill "$REBUILD_PID" 2>/dev/null || true; }
     return 0
 }
 
@@ -129,10 +131,12 @@ step() {
     fi
 }
 
-# Last non-empty line of a file, ANSI stripped, trimmed, truncated.
+# Last non-empty line of a file, ANSI stripped, trimmed, truncated. Empty
+# output gives an empty string (awk always exits 0; grep -v would exit 1 on
+# no input and, under pipefail, abort the run).
 last_line() {
-    sed 's/\x1b\[[0-9;]*m//g' "$1" | grep -v '^[[:space:]]*$' | tail -n 1 \
-        | sed 's/^[[:space:]]*//' | cut -c1-80
+    sed 's/\x1b\[[0-9;]*m//g' "$1" \
+        | awk 'NF { l = $0 } END { sub(/^[[:space:]]+/, "", l); print substr(l, 1, 80) }'
 }
 
 # End-of-run recap: every heading and status line again, back to back with no
@@ -171,11 +175,13 @@ summary() {
     fi
 }
 
+# Written to stderr so that, if it fires inside a $(...) or <(...) subshell,
+# the message cannot be captured as data by the caller.
 on_unexpected_error() {
     local file="$1" line="$2" cmd="$3"
-    echo
-    echo -e "${RED}Unexpected error in ${file##*/} line $line: $cmd${RESET}"
+    echo >&2
+    echo -e "${RED}Unexpected error in ${file##*/} line $line: $cmd${RESET}" >&2
     printf '\nABORTED: unexpected error in %s line %s: %s\n' "${file##*/}" "$line" "$cmd" >> "$LOG_FILE"
-    echo "Log: $LOG_FILE"
+    echo "Log: $LOG_FILE" >&2
     exit 1
 }

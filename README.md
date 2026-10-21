@@ -224,9 +224,9 @@ Add `phases/NN-name.sh`. It is sourced by `run.sh` with all of `lib/` loaded. Us
   the `systemctl restart` line, and AUR rebuilds with the `yay` line. `checkrebuild` is slow,
   so it starts in the background after the AUR update and its result is collected at the end.
 - The update and cleanup steps mirror what CachyOS's own `cachy-update` does interactively
-  (a fork of Arch-Update), minus the questions. `cachy-update` itself is in `pacman.txt` with
-  its tray applet set to autostart, for day-to-day updates between `cachyup` runs; the two do
-  not conflict.
+  (a fork of Arch-Update), minus the questions. `cachy-update` itself is in `pacman.txt`; its
+  package autostarts the tray applet system-wide, for day-to-day updates between `cachyup`
+  runs. The two do not conflict.
 
 ## Layout
 

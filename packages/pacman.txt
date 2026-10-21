@@ -19,6 +19,7 @@ libreoffice-fresh
 localsend
 loupe
 mediainfo-gui
+meld
 musescore
 nautilus
 nvme-cli

@@ -33,8 +33,9 @@ no_pacnew() {
     local -a files=()
     mapfile -t files < <(pacdiff -o 2>/dev/null)
     [[ ${#files[@]} -eq 0 ]] && return 0
-    CHECK_REASON="${#files[@]} to merge, run: sudo pacdiff"
+    CHECK_REASON="${#files[@]} to merge, see command above"
     local f; for f in "${files[@]}"; do note "$f"; done
+    note "merge them with:  sudo DIFFPROG=meld pacdiff"
     return 1
 }
 check ".pacnew files" no_pacnew "see above"
@@ -54,8 +55,10 @@ check "Reboot not required" kernel_current "kernel was updated, reboot when conv
 # list, no pacdiff, no restarting: report only.
 no_stale_services() {
     has_cmd checkservices || { CHECK_REASON="checkservices not installed"; return 1; }
+    local out
+    out="$(sudo checkservices -F -P -R 2>/dev/null || true)"
     local -a svcs=()
-    mapfile -t svcs < <(sudo checkservices -F -P -R 2>/dev/null | grep -oE "restart '[^']+'" | sed "s/restart '//; s/'//")
+    mapfile -t svcs < <(grep -oE "restart '[^']+'" <<< "$out" | sed "s/restart '//; s/'//" || true)
     [[ ${#svcs[@]} -eq 0 ]] && return 0
     CHECK_REASON="restart with: sudo systemctl restart ${svcs[*]}"
     return 1
