@@ -16,6 +16,7 @@ flatpak
 font-manager
 fuse2
 ghostty
+git-filter-repo
 gpu-screen-recorder
 gradia
 libreoffice-fresh
