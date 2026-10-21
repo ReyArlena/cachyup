@@ -1,6 +1,7 @@
 # Official + CachyOS repo packages. One per line, # comments allowed.
 bazaar
 btrfs-progs
+cachy-update
 cameractrls
 chromium
 clamav

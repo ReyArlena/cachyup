@@ -1,4 +1,5 @@
 # Installed before everything else. Needed by the script itself.
+archlinux-contrib # checkservices (services needing a restart)
 base-devel        # makepkg, for AUR builds
 git
 jq                # json config edits

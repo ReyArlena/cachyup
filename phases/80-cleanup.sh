@@ -9,9 +9,12 @@ orphans_none()   { [[ -z "$(pacman -Qtdq)" ]] && { SKIP_REASON="none"; return 0;
 orphans_remove() { pacman -Qtdq | sudo pacman -Rns --noconfirm -; }
 step "Orphaned packages" orphans_none orphans_remove
 
-cache_tidy()  { paccache -dk2 2>/dev/null | grep -q 'no candidate' && { SKIP_REASON="nothing to prune"; return 0; }; return 1; }
-cache_prune() { sudo paccache -rk2; }
-step "Package cache (keep 2 versions)" cache_tidy cache_prune
+# Keep 2 versions of installed packages, none of uninstalled ones (same policy
+# as cachy-update, which keeps 3 and 0).
+cache_candidates() { { paccache -dk2; paccache -duk0; } 2>/dev/null | sed -n 's/.*: \([0-9]*\) candidate.*/\1/p' | awk '{ n += $1 } END { print n + 0 }'; }
+cache_tidy()  { [[ "$(cache_candidates)" -eq 0 ]] && { SKIP_REASON="nothing to prune"; return 0; }; return 1; }
+cache_prune() { sudo paccache -rk2 && sudo paccache -ruk0; }
+step "Package cache" cache_tidy cache_prune
 
 yay_cache_empty() { [[ -z "$(ls -A "$HOME/.cache/yay" 2>/dev/null)" ]] && { SKIP_REASON="empty"; return 0; }; return 1; }
 yay_cache_clear() { du -sh "$HOME/.cache/yay" && rm -rf "$HOME/.cache/yay"/*; }
@@ -38,8 +41,26 @@ check ".pacnew files" no_pacnew "see above"
 
 # The modules dir of the running kernel is removed when the kernel package is
 # upgraded, so its absence means the running kernel is no longer installed.
-kernel_current() { [[ -d "/usr/lib/modules/$(uname -r)" ]]; }
+# kernel-modules-hook keeps those modules around, so with it installed this
+# test cannot tell; same guard as cachy-update.
+kernel_current() {
+    pacman -Qq kernel-modules-hook &>/dev/null && return 0
+    [[ -d "/usr/lib/modules/$(uname -r)" ]]
+}
 check "Reboot not required" kernel_current "kernel was updated, reboot when convenient"
+
+# Running services whose binaries or libraries were replaced by the update.
+# checkservices (archlinux-contrib) needs root; -F -P -R = no failed-service
+# list, no pacdiff, no restarting: report only.
+no_stale_services() {
+    has_cmd checkservices || { CHECK_REASON="checkservices not installed"; return 1; }
+    local -a svcs=()
+    mapfile -t svcs < <(sudo checkservices -F -P -R 2>/dev/null | grep -oE "restart '[^']+'" | sed "s/restart '//; s/'//")
+    [[ ${#svcs[@]} -eq 0 ]] && return 0
+    CHECK_REASON="restart with: sudo systemctl restart ${svcs[*]}"
+    return 1
+}
+check "No services need a restart" no_stale_services "see above"
 
 # Started in the background by 10-preflight.sh after the AUR update.
 no_rebuilds() {

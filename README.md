@@ -99,7 +99,7 @@ Phases live in `phases/` and run in filename order.
 | `20-packages.sh` | Pacman, then AUR (yay), then Flatpak (flathub), then conditional packages. All the long waits. |
 | `30-installers.sh` | Apps with their own install script, e.g. Claude Code. |
 | `40-config.sh` | Static config tweaks, e.g. Discord no self-update. |
-| `80-cleanup.sh` | Orphans, package cache (keeps 2 versions), yay build cache, unused flatpak runtimes. Then checks: `.pacnew` files, reboot needed, AUR rebuilds. |
+| `80-cleanup.sh` | Orphans, package cache (keeps 2 versions of installed, none of uninstalled), yay build cache, unused flatpak runtimes. Then checks: `.pacnew` files, reboot needed, services needing a restart, AUR rebuilds. |
 | `90-finish.sh` | Summary, log path, the only prompt. |
 
 ## Adding things
@@ -220,9 +220,13 @@ Add `phases/NN-name.sh`. It is sourced by `run.sh` with all of `lib/` loaded. Us
 - The sudo ticket is refreshed in the background for the whole run, so a long AUR build does
   not leave a password prompt waiting for you.
 - The post-update checks never act on their own. `.pacnew` files are listed for `sudo pacdiff`,
-  a kernel update is reported for you to reboot, and AUR rebuilds come with the `yay` line to
-  run. `checkrebuild` is slow, so it starts in the background after the AUR update and its
-  result is collected at the end.
+  a kernel update is reported for you to reboot, services running replaced binaries come with
+  the `systemctl restart` line, and AUR rebuilds with the `yay` line. `checkrebuild` is slow,
+  so it starts in the background after the AUR update and its result is collected at the end.
+- The update and cleanup steps mirror what CachyOS's own `cachy-update` does interactively
+  (a fork of Arch-Update), minus the questions. `cachy-update` itself is in `pacman.txt` with
+  its tray applet set to autostart, for day-to-day updates between `cachyup` runs; the two do
+  not conflict.
 
 ## Layout
 
