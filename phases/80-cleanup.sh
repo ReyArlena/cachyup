@@ -18,10 +18,10 @@ step "Package cache" cache_tidy cache_prune
 
 # yay keeps a git clone per AUR package under ~/.cache/yay, with sources and
 # built packages inside. Prune whole package dirs, never single files: deleting
-# old files out of a clone leaves a dir without .git, and yay's next fetch of
-# that package fails with "destination path already exists". A dir goes when
-# nothing in it was touched for KEEP_DAYS (so a rebuild or retry right after a
-# run still has its files), or when its clone is already broken.
+# old files out of a clone leaves a dir without .git, or with a hollow .git
+# (HEAD and objects gone), and yay's next fetch of that package fails. A dir
+# goes when nothing in it was touched for KEEP_DAYS (so a rebuild or retry
+# right after a run still has its files), or when its clone is already broken.
 YAY_CACHE="$HOME/.cache/yay"
 YAY_CACHE_KEEP_DAYS=30
 yay_cache_stale_dirs() {
@@ -29,7 +29,7 @@ yay_cache_stale_dirs() {
     for d in "$YAY_CACHE"/*/; do
         d="${d%/}"
         [[ -d "$d" ]] || continue
-        if [[ ! -d "$d/.git" ]]; then
+        if ! git -C "$d" rev-parse --git-dir &>/dev/null; then
             echo "$d"
         elif [[ -z "$(find "$d" -mtime -"$YAY_CACHE_KEEP_DAYS" -print -quit)" ]]; then
             echo "$d"
@@ -46,7 +46,11 @@ yay_cache_prune() {
     du -sh "$YAY_CACHE"
     local d
     while IFS= read -r d; do
-        [[ -d "$d/.git" ]] && echo "stale: ${d##*/}" || echo "broken clone: ${d##*/}"
+        if git -C "$d" rev-parse --git-dir &>/dev/null; then
+            echo "stale: ${d##*/}"
+        else
+            echo "broken clone: ${d##*/}"
+        fi
         rm -rf -- "$d"
     done < <(yay_cache_stale_dirs)
     du -sh "$YAY_CACHE"
