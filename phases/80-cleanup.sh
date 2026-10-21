@@ -16,7 +16,15 @@ cache_tidy()  { [[ "$(cache_candidates)" -eq 0 ]] && { SKIP_REASON="nothing to p
 cache_prune() { sudo paccache -rk2 && sudo paccache -ruk0; }
 step "Package cache" cache_tidy cache_prune
 
-yay_cache_empty() { [[ -z "$(ls -A "$HOME/.cache/yay" 2>/dev/null)" ]] && { SKIP_REASON="empty"; return 0; }; return 1; }
+# Keep the cache if anything AUR failed this run: it holds the downloads and
+# built packages the retry would otherwise redo from scratch.
+yay_cache_empty() {
+    if (( AUR_FAILED )) || grep -q $'^S\tFAILED\tyay -Sua' "$SUMMARY_FILE"; then
+        SKIP_REASON="kept, an AUR step failed this run"; return 0
+    fi
+    [[ -z "$(ls -A "$HOME/.cache/yay" 2>/dev/null)" ]] && { SKIP_REASON="empty"; return 0; }
+    return 1
+}
 yay_cache_clear() { du -sh "$HOME/.cache/yay" && rm -rf "$HOME/.cache/yay"/*; }
 step "yay build cache" yay_cache_empty yay_cache_clear
 

@@ -30,7 +30,18 @@ keyrings()       { sudo pacman -Sy --needed --noconfirm archlinux-keyring cachyo
 system_update()  { sudo pacman -Syu --noconfirm; }
 aur_update()     { yay -Sua --noconfirm --answerdiff None --answerclean None --removemake; }
 flatpak_update() { flatpak update -y --noninteractive; }
-no_rate_mirrors() { ! has_cmd cachyos-rate-mirrors && { SKIP_REASON="cachyos-rate-mirrors not installed"; return 0; }; return 1; }
+# Rating takes a while and rankings barely move week to week, so skip if the
+# mirrorlist (rewritten by cachyos-rate-mirrors) is newer than the cooldown.
+RATE_MIRRORS_COOLDOWN_DAYS=7
+MIRRORLIST=/etc/pacman.d/cachyos-mirrorlist
+no_rate_mirrors() {
+    has_cmd cachyos-rate-mirrors || { SKIP_REASON="cachyos-rate-mirrors not installed"; return 0; }
+    [[ -f "$MIRRORLIST" ]] || return 1
+    local age_days=$(( ($(date +%s) - $(stat -c %Y "$MIRRORLIST")) / 86400 ))
+    (( age_days < RATE_MIRRORS_COOLDOWN_DAYS )) || return 1
+    SKIP_REASON="rated ${age_days}d ago, cooldown ${RATE_MIRRORS_COOLDOWN_DAYS}d"
+    return 0
+}
 no_yay()          { ! has_cmd yay && { SKIP_REASON="yay not installed"; return 0; }; return 1; }
 no_flatpak()      { ! has_cmd flatpak && { SKIP_REASON="flatpak not installed"; return 0; }; return 1; }
 
