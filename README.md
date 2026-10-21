@@ -15,8 +15,14 @@ curl -fsSL https://reyarlena.github.io/cachyup/install.sh | bash
 ```
 
 This clones the repo to `~/.local/share/cachyup`, runs `run.sh`, and puts a `cachyup`
-command on your PATH. You are asked for your sudo password once at the start. Nothing else
-needs input until the end.
+command on your PATH. At the start you are asked which optional tags this machine wants (see
+[Tags](#tags)) and for your sudo password. Nothing else needs input until the end.
+
+To answer the tag question on the command line instead:
+
+```bash
+curl -fsSL https://reyarlena.github.io/cachyup/install.sh | bash -s -- --tags dev,gaming
+```
 
 Every run after that:
 
@@ -29,6 +35,14 @@ cachyup
 is "update the system and apply whatever changed in the lists". Preflight checks that
 `~/.local/bin` is on your PATH and reports FAILED if not; the link is still created.
 
+Options:
+
+```
+cachyup --tags dev,gaming   activate these tags and remember them
+cachyup --tags ask          ask the tag question again
+cachyup --tags none         no optional tags
+```
+
 Run as your normal user, not root. The script refuses to run as root because AUR builds and
 home-directory config must be owned by you.
 
@@ -40,12 +54,16 @@ Running as normal user......................PASS
 Running on CachyOS..........................PASS
 Internet connection.........................PASS
 Sudo access.................................PASS
+~/.local/bin on PATH........................PASS
+gum.........................................SKIPPED (already present)
+Tags........................................PASS (dev)
 
 ==> Pacman packages
 discord.....................................SKIPPED (already present)
 flatpak.....................................SUCCESS
 
 ==> AUR packages
+phpstorm....................................SKIPPED (tag: dev)
 spotify.....................................SUCCESS
 spotfiy.....................................FAILED (not found)
 
@@ -55,7 +73,7 @@ Claude Code.................................SKIPPED (already present)
  ==> Summary
    (every heading and status line again, with nothing in between)
 
-3 succeeded, 2 skipped, 1 failed
+3 succeeded, 3 skipped, 1 failed
 Command output for each failure is in the log, directly above its FAILED line.
 
 Log: ~/.local/state/cachyup/20261020-221500.log
@@ -75,7 +93,7 @@ Phases live in `phases/` and run in filename order.
 
 | Phase | What it does |
 |-------|--------------|
-| `10-preflight.sh` | Not root, CachyOS, internet, sudo, PATH. Then `pacman -Syu`, the tools the script itself needs, and the `cachyup` command. |
+| `10-preflight.sh` | Not root, CachyOS, internet, sudo, PATH, gum, the tag question. Then `pacman -Syu`, the tools the script itself needs, and the `cachyup` command. |
 | `20-packages.sh` | Pacman, then AUR (yay), then Flatpak (flathub), then conditional packages. All the long waits. |
 | `30-installers.sh` | Apps with their own install script, e.g. Claude Code. |
 | `40-config.sh` | Static config tweaks, e.g. Discord no self-update. |
@@ -101,6 +119,33 @@ own honest result and reason.
 
 Real package names only. Groups (`gnome`) and virtual names (`jack`) are not resolved and
 show as not found.
+
+### Tags
+
+Optional packages carry one or more `@tag`s after the name:
+
+```
+phpstorm       @dev
+obs-studio     @streaming @full
+```
+
+A tagged line installs when any of its tags is active on this machine; untagged lines always
+install. Inactive ones show as `SKIPPED (tag: streaming/full)` so the summary stays honest.
+
+There is no list of valid tags to maintain. The available tags are collected at run time from
+every `@tag` in `packages/*.txt` and every `has_tag NAME` in the scripts, so adding a new tag
+is just using it. On the first run you get a gum multi-select of those tags with the packages
+each one brings (x toggles, enter confirms); the answer is saved to `~/.config/cachyup/tags`
+and later runs are silent. `--tags` changes and re-saves the selection.
+
+Scripts in `conditional/`, `installers/` and `config/` use the same tags with `has_tag`:
+
+```bash
+check() {
+    has_tag dev || { SKIP_REASON="tag: dev"; return 0; }
+    ...
+}
+```
 
 ### A conditional package
 
@@ -133,8 +178,8 @@ check() { ...; }        # exit 0 if already done  ->  SKIPPED
 run()   { ...; }        # do it; non-zero exit    ->  FAILED (last line of output)
 ```
 
-Everything in `lib/` is available: `has_cmd`, `json_get`, `json_set`, `ini_get`, `ini_set`,
-`write_file`, `copy_file`, `read_list`, `status`, `note`. See `installers/claude.sh`,
+Everything in `lib/` is available: `has_cmd`, `has_tag`, `json_get`, `json_set`, `ini_get`,
+`ini_set`, `write_file`, `copy_file`, `read_list`, `status`, `note`. See `installers/claude.sh`,
 `config/discord.sh` and `config/junction-default.sh`.
 
 Writing files: use `write_file FILE` (content on stdin), `copy_file SRC DST`, `json_set` or
@@ -181,6 +226,7 @@ lib/log.sh       status lines, step(), log file, summary
 lib/utils.sh     require/check, sudo keepalive, read_list, run_scripts
 lib/files.sh     write_file, copy_file, json_get, json_set, ini_get, ini_set
 lib/pkg.sh       install_list + pacman/aur/flatpak backends
+lib/tags.sh      tag discovery, the tag question, has_tag, saved selection
 phases/          ordered stages
 packages/        package list files
 conditional/     NAME/check/run scripts for packages with an install condition

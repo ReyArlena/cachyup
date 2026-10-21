@@ -3,6 +3,8 @@
 #
 # First run on a fresh machine (works from fish, bash or zsh):
 #   curl -fsSL https://reyarlena.github.io/cachyup/install.sh | bash
+# with options for run.sh:
+#   curl -fsSL https://reyarlena.github.io/cachyup/install.sh | bash -s -- --tags dev
 #
 # Every run after that, from the `cachyup` command run.sh puts on PATH
 # (a symlink to this file inside the clone). Running from inside a clone

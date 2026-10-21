@@ -1,4 +1,6 @@
 # AUR packages, installed with yay.
 amethyst-mod-manager
 discord-ptb
+phpstorm       @dev
+phpstorm-jre   @dev
 spotify

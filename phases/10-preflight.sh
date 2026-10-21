@@ -12,6 +12,15 @@ require "Internet connection"     has_internet   "cannot reach github.com"
 require "Sudo access"             sudo_keepalive "sudo authentication failed"
 check   "~/.local/bin on PATH"    local_bin_on_path "add ~/.local/bin to PATH so the cachyup command is found"
 
+# gum is needed for the tag question, which must come before the long system
+# update. -Sy (not -Syu) so it is quick; the full -Syu follows straight after.
+has_gum()     { has_cmd gum; }
+install_gum() { sudo pacman -Sy --needed --noconfirm gum; }
+step "gum" has_gum install_gum
+
+tags_load
+status "Tags" PASS "$(tags_summary)"
+
 heading "System update"
 system_update() { sudo pacman -Syu --noconfirm; }
 step "pacman -Syu" false system_update

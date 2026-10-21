@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Package installation. One flow for pacman, AUR (yay) and flatpak, one
 # package at a time so every package gets its own honest result:
-#   SKIPPED  already installed
+#   SKIPPED  already installed, or tagged and no tag of its active
 #   FAILED   not found in any source, or the install ran and it is still absent
 #   SUCCESS  installed now
 #
@@ -9,12 +9,16 @@
 
 install_list() {
     local kind="$1" file="$2"
-    local -a pkgs=()
-    mapfile -t pkgs < <(read_list "$file")
+    local -a lines=()
+    mapfile -t lines < <(read_list "$file")
 
-    local p
-    for p in "${pkgs[@]}"; do
-        if "${kind}_installed" "$p"; then
+    local line p
+    for line in "${lines[@]}"; do
+        parse_list_line "$line"
+        p="$LINE_NAME"
+        if ! line_wanted; then
+            status "$p" SKIPPED "$LINE_SKIP_REASON"
+        elif "${kind}_installed" "$p"; then
             status "$p" SKIPPED "already present"
         elif ! "${kind}_available" "$p"; then
             status "$p" FAILED "not found"
