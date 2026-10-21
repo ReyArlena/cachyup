@@ -1,5 +1,7 @@
 # Installed before everything else. Needed by the script itself.
-base-devel   # makepkg, for AUR builds
+base-devel        # makepkg, for AUR builds
 git
-jq           # json config edits
-yay          # AUR helper (cachyos repo)
+jq                # json config edits
+pacman-contrib    # paccache, pacdiff (cleanup and .pacnew check)
+rebuild-detector  # checkrebuild (AUR packages needing a rebuild)
+yay               # AUR helper (cachyos repo)

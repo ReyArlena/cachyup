@@ -35,8 +35,9 @@ on_interrupt() {
 
 # The one EXIT trap. Anything that needs tearing down at exit goes here.
 cleanup() {
-    rm -f "$SUMMARY_FILE"
+    rm -f "$SUMMARY_FILE" "${REBUILD_OUT:-}"
     [[ -n "${SUDO_KEEPALIVE_PID:-}" ]] && kill "$SUDO_KEEPALIVE_PID" 2>/dev/null
+    [[ -n "${REBUILD_PID:-}" ]] && kill "$REBUILD_PID" 2>/dev/null
     return 0
 }
 

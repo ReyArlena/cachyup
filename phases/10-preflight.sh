@@ -22,8 +22,32 @@ tags_load
 status "Tags" PASS "$(tags_summary)"
 
 heading "System update"
-system_update() { sudo pacman -Syu --noconfirm; }
-step "pacman -Syu" false system_update
+# Order matters: fast mirrors first, fresh keyrings so signatures verify on a
+# machine that has not updated in a while, then the full upgrade, then the
+# sources pacman does not cover.
+rate_mirrors()   { sudo cachyos-rate-mirrors; }
+keyrings()       { sudo pacman -Sy --needed --noconfirm archlinux-keyring cachyos-keyring; }
+system_update()  { sudo pacman -Syu --noconfirm; }
+aur_update()     { yay -Sua --noconfirm --answerdiff None --answerclean None --removemake; }
+flatpak_update() { flatpak update -y --noninteractive; }
+no_rate_mirrors() { ! has_cmd cachyos-rate-mirrors && { SKIP_REASON="cachyos-rate-mirrors not installed"; return 0; }; return 1; }
+no_yay()          { ! has_cmd yay && { SKIP_REASON="yay not installed"; return 0; }; return 1; }
+no_flatpak()      { ! has_cmd flatpak && { SKIP_REASON="flatpak not installed"; return 0; }; return 1; }
+
+step "Rate mirrors"    no_rate_mirrors rate_mirrors
+step "Keyrings"        false           keyrings
+step "pacman -Syu"     false           system_update
+step "yay -Sua"        no_yay          aur_update
+step "flatpak update"  no_flatpak      flatpak_update
+
+# checkrebuild (AUR packages linked against removed libraries) runs ldd over
+# every file of every AUR package and takes minutes. Start it now in the
+# background; the post-update checks in 80-cleanup.sh collect the result.
+REBUILD_OUT="$(mktemp)"
+if has_cmd checkrebuild; then
+    checkrebuild > "$REBUILD_OUT" 2>/dev/null &
+    REBUILD_PID=$!
+fi
 
 heading "Prerequisites"
 install_list pacman "$BOOTSTRAP_DIR/packages/prerequisites.txt"

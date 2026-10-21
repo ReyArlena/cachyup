@@ -22,13 +22,15 @@ require() {
 }
 
 # check NAME CHECK_CMD MESSAGE_ON_FAILURE
-#   Like require, but a failure is logged and the run continues.
+#   Like require, but a failure is logged and the run continues. The check
+#   function may set CHECK_REASON to replace MESSAGE_ON_FAILURE.
 check() {
     local name="$1" check="$2" msg="$3"
+    CHECK_REASON=""
     if $check; then
         status "$name" PASS
     else
-        status "$name" FAILED "$msg"
+        status "$name" FAILED "${CHECK_REASON:-$msg}"
     fi
 }
 

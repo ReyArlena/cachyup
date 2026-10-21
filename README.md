@@ -1,8 +1,10 @@
 # cachyup
 
 One command to set up a fresh CachyOS install: packages, app installers, config tweaks.
-Idempotent, so re-running it is always safe, and re-running is how you update: it does a
-full system update, installs anything new in the lists, and skips everything already done.
+Idempotent, so re-running it is always safe, and re-running is how you update: it rates
+mirrors, updates repo, AUR and flatpak packages, installs anything new in the lists, skips
+everything already done, cleans up, and reports what needs a human (`.pacnew` files, a
+pending reboot, AUR packages needing a rebuild).
 All the slow parts run first with no prompts, so you can start it, go and make tea, and come
 back to a summary.
 
@@ -93,10 +95,11 @@ Phases live in `phases/` and run in filename order.
 
 | Phase | What it does |
 |-------|--------------|
-| `10-preflight.sh` | Not root, CachyOS, internet, sudo, PATH, gum, the tag question. Then `pacman -Syu`, the tools the script itself needs, and the `cachyup` command. |
+| `10-preflight.sh` | Not root, CachyOS, internet, sudo, PATH, gum, the tag question. Then rate mirrors, keyrings, `pacman -Syu`, `yay -Sua`, `flatpak update`, the tools the script itself needs, and the `cachyup` command. |
 | `20-packages.sh` | Pacman, then AUR (yay), then Flatpak (flathub), then conditional packages. All the long waits. |
 | `30-installers.sh` | Apps with their own install script, e.g. Claude Code. |
 | `40-config.sh` | Static config tweaks, e.g. Discord no self-update. |
+| `80-cleanup.sh` | Orphans, package cache (keeps 2 versions), yay build cache, unused flatpak runtimes. Then checks: `.pacnew` files, reboot needed, AUR rebuilds. |
 | `90-finish.sh` | Summary, log path, the only prompt. |
 
 ## Adding things
@@ -216,6 +219,10 @@ Add `phases/NN-name.sh`. It is sourced by `run.sh` with all of `lib/` loaded. Us
   the AUR phase if one is ever needed.
 - The sudo ticket is refreshed in the background for the whole run, so a long AUR build does
   not leave a password prompt waiting for you.
+- The post-update checks never act on their own. `.pacnew` files are listed for `sudo pacdiff`,
+  a kernel update is reported for you to reboot, and AUR rebuilds come with the `yay` line to
+  run. `checkrebuild` is slow, so it starts in the background after the AUR update and its
+  result is collected at the end.
 
 ## Layout
 
