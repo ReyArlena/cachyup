@@ -24,17 +24,40 @@ step "Package cache" cache_tidy cache_prune
 # right after a run still has its files), or when its clone is already broken.
 YAY_CACHE="$HOME/.cache/yay"
 YAY_CACHE_KEEP_DAYS=30
+# Is DIR itself a usable git repo (work tree or bare)? A gutted repo is not
+# recognised by git, which then walks up and reports an enclosing one, so
+# compare what git found against DIR rather than trusting the exit status.
+git_repo_is() {
+    local dir found
+    dir=$(realpath "$1")
+    found=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) && [[ "$found" == "$dir" ]] && return 0
+    found=$(git -C "$dir" rev-parse --absolute-git-dir 2>/dev/null) && [[ "$found" == "$dir" ]]
+}
+# A package dir is broken when its AUR clone is gone, or when a bare mirror of
+# a VCS source inside it (makepkg keeps these next to the PKGBUILD) is gone:
+# makepkg then stops with "<dir> is not a clone of <url>".
+yay_cache_dir_broken() {
+    local d="$1" sub
+    git_repo_is "$d" || return 0
+    for sub in "$d"/*/; do
+        sub="${sub%/}"
+        [[ -f "$sub/config" && -f "$sub/description" ]] || continue
+        git_repo_is "$sub" || return 0
+    done
+    return 1
+}
 yay_cache_stale_dirs() {
     local d
     for d in "$YAY_CACHE"/*/; do
         d="${d%/}"
         [[ -d "$d" ]] || continue
-        if ! git -C "$d" rev-parse --git-dir &>/dev/null; then
+        if yay_cache_dir_broken "$d"; then
             echo "$d"
         elif [[ -z "$(find "$d" -mtime -"$YAY_CACHE_KEEP_DAYS" -print -quit)" ]]; then
             echo "$d"
         fi
     done
+    return 0
 }
 yay_cache_tidy() {
     [[ -d "$YAY_CACHE" ]] || { SKIP_REASON="empty"; return 0; }
@@ -46,10 +69,10 @@ yay_cache_prune() {
     du -sh "$YAY_CACHE"
     local d
     while IFS= read -r d; do
-        if git -C "$d" rev-parse --git-dir &>/dev/null; then
-            echo "stale: ${d##*/}"
-        else
+        if yay_cache_dir_broken "$d"; then
             echo "broken clone: ${d##*/}"
+        else
+            echo "stale: ${d##*/}"
         fi
         rm -rf -- "$d"
     done < <(yay_cache_stale_dirs)
