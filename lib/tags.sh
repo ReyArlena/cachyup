@@ -84,8 +84,10 @@ tags_ask() {
     CACHYUP_TAGS=()
     local line
     for line in "${chosen[@]}"; do
-        [[ -n "$line" ]] && CACHYUP_TAGS+=("${line%% *}")
+        [[ -n "$line" ]] || continue
+        CACHYUP_TAGS+=("${line%% *}")
     done
+    return 0
 }
 
 # Decide the active tags. Returns 0; the status line is printed by the caller.
