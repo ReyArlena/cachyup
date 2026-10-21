@@ -1,11 +1,14 @@
 # Official + CachyOS repo packages. One per line, # comments allowed.
+ark
 bazaar
 btrfs-progs
 cachy-update
 cameractrls
 chromium
 clamav
+decoder
 discord
+eyedropper
 filelight
 filezilla
 fio
@@ -35,5 +38,7 @@ smartmontools
 stow
 stress-ng
 sushi
+switcheroo
 tailscale
+textpieces
 zed
