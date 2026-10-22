@@ -7,24 +7,24 @@ btop
 btrfs-assistant
 btrfs-progs
 cachy-update
-cachyos-gaming-applications  @gaming
-cachyos-gaming-meta          @gaming
+cachyos-gaming-applications
+cachyos-gaming-meta
 cameractrls
 chromium
 clamav
 claude-desktop
-cloudflared                  @dev
-cmake                        @dev
+cloudflared
+cmake
 decoder
-delve                        @dev
+delve
 discord
-docker                       @dev
-docker-buildx                @dev
-docker-compose               @dev
+docker
+docker-buildx
+docker-compose
 dolphin
 duf
 dux-gop
-emacs                        @dev
+emacs
 evolution
 evolution-ews
 evtest
@@ -39,18 +39,18 @@ font-manager
 fuse2
 ghostty
 ghostwriter
-github-cli                   @dev
+github-cli
 glances
 gnome-keyring
-go                           @dev
-godot                        @dev
-gopls                        @dev
+go
+godot
+gopls
 gpu-screen-recorder
 gradia
 gvfs-afc
 inotify-tools
-intellij-idea-oss            @dev
-lazygit                      @dev
+intellij-idea-oss
+lazygit
 libinput-tools
 libisoburn
 libreoffice-fresh
@@ -62,38 +62,38 @@ micro
 musescore
 nautilus
 networkmanager-openvpn
-ninja                        @dev
+ninja
 nvme-cli
 nvtop
 obs-studio-browser
 obsidian
 occt
 onlyoffice-bin
-opencode                     @dev
-openrct2                     @game
+opencode
+openrct2
 openrgb
 pandoc-cli
-parsec-bin                   @gaming
+parsec-bin
 partitionmanager
 paru
 pavucontrol
 playerctl
 plezy
-podman                       @dev
-prismlauncher                @game
-protonup-qt                  @gaming
+podman
+prismlauncher
+protonup-qt
 pv
 rclone
 ripgrep
-rustup                       @dev
+rustup
 seahorse
-shellcheck                   @dev
+shellcheck
 slurp
 smartmontools
 squashfs-tools
 stow
 stress-ng
-sunshine                     @gaming
+sunshine
 sushi
 switcheroo
 tailscale
@@ -111,5 +111,5 @@ xclip
 xdg-desktop-portal-gnome
 xdg-desktop-portal-hyprland
 yt-dlp
-zed                          @dev
+zed
 zen-browser-bin

@@ -13,19 +13,15 @@ done
 
 usage() {
     cat <<'USAGE'
-Usage: cachyup [--tags LIST | --tags ask | --tags none]
+Usage: cachyup
 
-  --tags LIST   activate these tags (comma separated) and remember them
-  --tags ask    ask the tag question again
-  --tags none   no optional tags
-With no option the saved tags are used, or you are asked once on first run.
+No options. New apps are asked about at the start of each run, and every run
+offers to customise the full selection (saved in ~/.config/cachyup/apps).
 USAGE
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --tags)   [[ $# -ge 2 ]] || { usage; exit 2; }; CACHYUP_TAGS_ARG="$2"; shift 2 ;;
-        --tags=*) CACHYUP_TAGS_ARG="${1#--tags=}"; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 2 ;;
     esac

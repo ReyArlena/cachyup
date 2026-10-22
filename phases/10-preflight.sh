@@ -12,14 +12,17 @@ require "Internet connection"     has_internet   "cannot reach github.com"
 require "Sudo access"             sudo_keepalive "sudo authentication failed"
 check   "~/.local/bin on PATH"    local_bin_on_path "add ~/.local/bin to PATH so the cachyup command is found"
 
-# gum is needed for the tag question, which must come before the long system
+# gum is needed for the app questions, which must come before the long system
 # update. -Sy (not -Syu) so it is quick; the full -Syu follows straight after.
 has_gum()     { has_cmd gum; }
 install_gum() { sudo pacman -Sy --needed --noconfirm gum; }
 step "gum" has_gum install_gum
 
-tags_load
-status "Tags" PASS "$(tags_summary)"
+# All the questions, together, then nothing until the end.
+apps_load
+apps_ask_new
+apps_offer_customise
+status "Apps" PASS "$(apps_summary)"
 
 heading "System update"
 # Order matters: fast mirrors first, fresh keyrings so signatures verify on a
@@ -61,7 +64,7 @@ if has_cmd checkrebuild; then
 fi
 
 heading "Prerequisites"
-install_list pacman "$BOOTSTRAP_DIR/packages/prerequisites.txt"
+install_list pacman "$BOOTSTRAP_DIR/packages/prerequisites.txt" always
 
 # `cachyup` on PATH: a symlink to install.sh inside this clone, so every later run
 # is just `cachyup` (install.sh pulls the latest and runs run.sh).

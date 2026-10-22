@@ -1,19 +1,19 @@
 # AUR packages, installed with yay.
-amethyst-mod-manager               @gaming
+amethyst-mod-manager
 dankcalendar-bin
 discord-ptb
 dsearch-bin
-figma-linux-next-bin               @dev
+figma-linux-next-bin
 google-chrome
-herdr-bin                          @dev
+herdr-bin
 hyprland-preview-share-picker-git
-openttd-jgrpp                      @game
-phpstorm                           @dev
-phpstorm-jre                       @dev
-rustrover                          @dev
-rustrover-jre                      @dev
+openttd-jgrpp
+phpstorm
+phpstorm-jre
+rustrover
+rustrover-jre
 spotify
 ttf-symbola
 upnote-appimage
 uxplay
-visual-studio-code-bin             @dev
+visual-studio-code-bin

@@ -17,14 +17,8 @@ curl -fsSL https://reyarlena.github.io/cachyup/install.sh | bash
 ```
 
 This clones the repo to `~/.local/share/cachyup`, runs `run.sh`, and puts a `cachyup`
-command on your PATH. At the start you are asked which optional tags this machine wants (see
-[Tags](#tags)) and for your sudo password. Nothing else needs input until the end.
-
-To answer the tag question on the command line instead:
-
-```bash
-curl -fsSL https://reyarlena.github.io/cachyup/install.sh | bash -s -- --tags dev,gaming
-```
+command on your PATH. At the start you are asked for your sudo password and which apps this
+machine wants (see [App selection](#app-selection)). Nothing else needs input until the end.
 
 Every run after that:
 
@@ -37,13 +31,8 @@ cachyup
 is "update the system and apply whatever changed in the lists". Preflight checks that
 `~/.local/bin` is on your PATH and reports FAILED if not; the link is still created.
 
-Options:
-
-```
-cachyup --tags dev,gaming   activate these tags and remember them
-cachyup --tags ask          ask the tag question again
-cachyup --tags none         no optional tags
-```
+There are no options. Apps added to the lists since your last run are asked about at the
+start, and every run offers to customise the full selection.
 
 Run as your normal user, not root. The script refuses to run as root because AUR builds and
 home-directory config must be owned by you.
@@ -58,14 +47,14 @@ Internet connection.........................PASS
 Sudo access.................................PASS
 ~/.local/bin on PATH........................PASS
 gum.........................................SKIPPED (already present)
-Tags........................................PASS (dev)
+Apps........................................PASS (2 new: 1 install, 1 skip)
 
 ==> Pacman packages
 discord.....................................SKIPPED (already present)
 flatpak.....................................SUCCESS
 
 ==> AUR packages
-phpstorm....................................SKIPPED (tag: dev)
+phpstorm....................................SKIPPED (deselected)
 spotify.....................................SUCCESS
 spotfiy.....................................FAILED (not found)
 
@@ -95,7 +84,7 @@ Phases live in `phases/` and run in filename order.
 
 | Phase | What it does |
 |-------|--------------|
-| `10-preflight.sh` | Not root, CachyOS, internet, sudo, PATH, gum, the tag question. Then rate mirrors, keyrings, `pacman -Syu`, `yay -Sua`, `flatpak update`, the tools the script itself needs, and the `cachyup` command. |
+| `10-preflight.sh` | Not root, CachyOS, internet, sudo, PATH, gum, the app questions. Then rate mirrors, keyrings, `pacman -Syu`, `yay -Sua`, `flatpak update`, the tools the script itself needs, and the `cachyup` command. |
 | `20-packages.sh` | Pacman, then AUR (yay), then Flatpak (flathub), then conditional packages. All the long waits. |
 | `30-installers.sh` | Apps with their own install script, e.g. Claude Code. |
 | `40-config.sh` | Static config tweaks, e.g. Discord no self-update. |
@@ -123,32 +112,33 @@ own honest result and reason.
 Real package names only. Groups (`gnome`) and virtual names (`jack`) are not resolved and
 show as not found.
 
-### Tags
+### App selection
 
-Optional packages carry one or more `@tag`s after the name:
+The lists say what exists. Which of it this machine wants is decided in two gum screens at the
+start of the run, before the long update, and saved to `~/.config/cachyup/apps`:
 
-```
-phpstorm       @dev
-obs-studio     @streaming @full
-```
+1. **New apps.** Any list line with no decision saved yet is shown, one multi-select per
+   source (pacman, AUR, flatpak), everything pre-checked. Untick what you do not want, enter
+   confirms. On the first run that is the whole list. Skipped entirely when nothing is new,
+   so adding a package to a list is what makes the question appear on every machine.
+2. **Customise the full app selection?** Asked every run, default No, so Enter carries on.
+   Yes shows every package with the current selection pre-checked.
 
-A tagged line installs when any of its tags is active on this machine; untagged lines always
-install. Inactive ones show as `SKIPPED (tag: streaming/full)` so the summary stays honest.
+Esc or Ctrl-C on a screen aborts the run rather than counting as "skip everything".
 
-There is no list of valid tags to maintain. The available tags are collected at run time from
-every `@tag` in `packages/*.txt` and every `has_tag NAME` in the scripts, so adding a new tag
-is just using it. On the first run you get a gum multi-select of those tags with the packages
-each one brings (x toggles, enter confirms); the answer is saved to `~/.config/cachyup/tags`
-and later runs are silent. `--tags` changes and re-saves the selection.
+`~/.config/cachyup/apps` has one line per package, `kind/name` and a state:
 
-Scripts in `conditional/`, `installers/` and `config/` use the same tags with `has_tag`:
+| State | Meaning |
+|-------|---------|
+| `install` | Wanted. Installed when absent, retried each run until it succeeds. |
+| `done` | cachyup installed it, or found it already present, at least once. Hands off from then on: if it goes missing later you removed it on purpose, and it is not reinstalled. |
+| `skip` | Unticked. Never installed. |
 
-```bash
-check() {
-    has_tag dev || { SKIP_REASON="tag: dev"; return 0; }
-    ...
-}
-```
+The file records what cachyup did and what you chose, never what the system has right now,
+so it does not go stale. The status line says which: `SKIPPED (already present)`,
+`SKIPPED (deselected)`, `SKIPPED (removed manually)`. To get a removed package back, say Yes
+to the customise question and tick it again. Packages dropped from a list are forgotten, so
+adding them back asks again. `prerequisites.txt` is never asked about.
 
 ### A conditional package
 
@@ -181,7 +171,7 @@ check() { ...; }        # exit 0 if already done  ->  SKIPPED
 run()   { ...; }        # do it; non-zero exit    ->  FAILED (last line of output)
 ```
 
-Everything in `lib/` is available: `has_cmd`, `has_tag`, `json_get`, `json_set`, `ini_get`,
+Everything in `lib/` is available: `has_cmd`, `json_get`, `json_set`, `ini_get`,
 `ini_set`, `write_file`, `copy_file`, `read_list`, `status`, `note`. See `installers/claude.sh`,
 `config/discord.sh` and `config/junction-default.sh`.
 
@@ -201,7 +191,8 @@ Add `phases/NN-name.sh`. It is sourced by `run.sh` with all of `lib/` loaded. Us
 
 - `step NAME CHECK_FN ACTION_FN` for one thing. `CHECK_FN` and `ACTION_FN` are function names
   called with no arguments; wrap anything needing arguments or quotes in a small function.
-- `install_list KIND FILE` for a package list.
+- `install_list KIND FILE` for a package list honouring the app selection, `install_list KIND
+  FILE always` for one that is always installed.
 - `run_scripts DIR` for a directory of `NAME`/`check`/`run` scripts.
 - `require NAME CHECK_FN MSG` for a check that must pass (aborts), `check NAME CHECK_FN MSG`
   for one that just reports.
@@ -240,7 +231,7 @@ lib/log.sh       status lines, step(), log file, summary
 lib/utils.sh     require/check, sudo keepalive, read_list, run_scripts
 lib/files.sh     write_file, copy_file, json_get, json_set, ini_get, ini_set
 lib/pkg.sh       install_list + pacman/aur/flatpak backends
-lib/tags.sh      tag discovery, the tag question, has_tag, saved selection
+lib/apps.sh      app selection: the two questions and ~/.config/cachyup/apps
 phases/          ordered stages
 packages/        package list files
 conditional/     NAME/check/run scripts for packages with an install condition
