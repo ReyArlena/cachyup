@@ -1,44 +1,115 @@
 # Official + CachyOS repo packages. One per line, # comments allowed.
+adw-gtk-theme
+alacritty
 ark
 bazaar
+btop
+btrfs-assistant
 btrfs-progs
 cachy-update
+cachyos-gaming-applications  @gaming
+cachyos-gaming-meta          @gaming
 cameractrls
 chromium
 clamav
+claude-desktop
+cloudflared                  @dev
+cmake                        @dev
 decoder
+delve                        @dev
 discord
+docker                       @dev
+docker-buildx                @dev
+docker-compose               @dev
+dolphin
+duf
+dux-gop
+emacs                        @dev
+evolution
+evolution-ews
+evtest
 eyedropper
 filelight
 filezilla
 fio
+firefox
 flatpak
+flite
 font-manager
 fuse2
 ghostty
+ghostwriter
+github-cli                   @dev
+glances
+gnome-keyring
+go                           @dev
+godot                        @dev
+gopls                        @dev
 gpu-screen-recorder
 gradia
+gvfs-afc
+inotify-tools
+intellij-idea-oss            @dev
+lazygit                      @dev
+libinput-tools
+libisoburn
 libreoffice-fresh
 localsend
 loupe
 mediainfo-gui
 meld
+micro
 musescore
 nautilus
+networkmanager-openvpn
+ninja                        @dev
 nvme-cli
-obsidian
+nvtop
 obs-studio-browser
+obsidian
+occt
+onlyoffice-bin
+opencode                     @dev
+openrct2                     @game
 openrgb
+pandoc-cli
+parsec-bin                   @gaming
 partitionmanager
+paru
+pavucontrol
+playerctl
 plezy
-prismlauncher
-protonup-qt
+podman                       @dev
+prismlauncher                @game
+protonup-qt                  @gaming
+pv
 rclone
+ripgrep
+rustup                       @dev
+seahorse
+shellcheck                   @dev
+slurp
 smartmontools
+squashfs-tools
 stow
 stress-ng
+sunshine                     @gaming
 sushi
 switcheroo
 tailscale
+telegram-desktop
 textpieces
-zed
+ttf-nerd-fonts-symbols-mono
+unrar
+unzip
+uwsm
+waterfox-bin
+wl-clipboard
+wofi
+wtype
+xclip
+xdg-desktop-portal-gnome
+xdg-desktop-portal-hyprland
+yt-dlp
+zed                          @dev
+zen-browser-bin
