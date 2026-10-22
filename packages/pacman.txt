@@ -1,9 +1,7 @@
 # Official + CachyOS repo packages. One per line, # comments allowed.
 adw-gtk-theme
-alacritty
 ark
 bazaar
-btop
 btrfs-assistant
 btrfs-progs
 cachy-update
@@ -22,7 +20,6 @@ docker
 docker-buildx
 docker-compose
 dolphin
-duf
 dux-gop
 emacs
 evolution
@@ -32,7 +29,6 @@ eyedropper
 filelight
 filezilla
 fio
-firefox
 flatpak
 flite
 font-manager
@@ -40,7 +36,6 @@ fuse2
 ghostty
 ghostwriter
 github-cli
-glances
 gnome-keyring
 go
 godot
@@ -58,11 +53,8 @@ libreoffice-fresh
 localsend
 loupe
 mediainfo-gui
-meld
-micro
 musescore
 nautilus
-networkmanager-openvpn
 ninja
 nvme-cli
 nvtop
@@ -78,20 +70,16 @@ pandoc-cli
 parsec-bin
 partitionmanager
 paru
-pavucontrol
 playerctl
 plezy
 podman
 prismlauncher
 protonup-qt
-pv
 rclone
-ripgrep
 rustup
 seahorse
 shellcheck
 slurp
-smartmontools
 squashfs-tools
 stow
 stress-ng
@@ -102,8 +90,6 @@ tailscale
 telegram-desktop
 textpieces
 ttf-nerd-fonts-symbols-mono
-unrar
-unzip
 uwsm
 waterfox-bin
 wl-clipboard
