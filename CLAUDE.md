@@ -17,7 +17,7 @@ Sets up and updates a CachyOS install: a Rust binary with a ratatui TUI and a he
 - Never replace a user's file: write through symlinks with `paths::write_file`.
 - Engine must not know about terminals. New UI needs go through `Event`/`Effect`.
 - Only the 16 named terminal colours (`tui/theme.rs`). Only the focused pane gets a coloured border.
-- Arrows and j/k are navigation only. `h` is history, so h/l are not vim left/right.
+- Arrows and h/j/k/l are navigation only. Never bind them to actions (history is `H`).
 - Before every commit, grep for personal data (passwords, IPs, hostnames, emails).
 - Update `CHANGELOG.md` (Keep a Changelog) with user-visible changes.
 - Comment concisely for humans; prefer readable code over clever shorthand.

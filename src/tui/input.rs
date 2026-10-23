@@ -1,8 +1,8 @@
 //! Translate raw terminal events into app actions, and map mouse clicks back
 //! onto whatever was drawn.
 //!
-//! Arrows and j/k only ever move. `h` opens the history, so h/l are not
-//! vim-style left/right here.
+//! Arrows and h/j/k/l only ever move. Everything else is a letter or
+//! Space/Enter/Esc.
 
 use crossterm::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -57,8 +57,8 @@ pub fn map_key(key: KeyEvent) -> Option<Action> {
     Some(match key.code {
         KeyCode::Up | KeyCode::Char('k') => Action::Up,
         KeyCode::Down | KeyCode::Char('j') => Action::Down,
-        KeyCode::Left => Action::Left,
-        KeyCode::Right => Action::Right,
+        KeyCode::Left | KeyCode::Char('h') => Action::Left,
+        KeyCode::Right | KeyCode::Char('l') => Action::Right,
         KeyCode::PageUp => Action::PageUp,
         KeyCode::PageDown => Action::PageDown,
         KeyCode::Home | KeyCode::Char('g') => Action::Home,
@@ -140,9 +140,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn h_is_a_letter_not_navigation() {
+    fn vim_keys_navigate_and_letters_pass_through() {
         let key = |c| map_key(KeyEvent::new(c, KeyModifiers::NONE)).unwrap();
-        assert_eq!(key(KeyCode::Char('h')), Action::Char('h'));
+        assert_eq!(key(KeyCode::Char('h')), Action::Left);
+        assert_eq!(key(KeyCode::Char('H')), Action::Char('H'));
         assert_eq!(key(KeyCode::Char('j')), Action::Down);
         assert_eq!(key(KeyCode::Char(' ')), Action::Toggle);
     }

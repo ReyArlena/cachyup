@@ -118,6 +118,10 @@ pub struct Modal {
     pub input: Option<TextInput>,
     /// Vertical scroll for long bodies.
     pub scroll: u16,
+    /// Text `c` copies to the clipboard (a command to run).
+    pub copy: Option<String>,
+    /// Set when `c` was pressed; the app does the copy and clears it.
+    pub copy_requested: bool,
 }
 
 impl Modal {
@@ -128,6 +132,8 @@ impl Modal {
             buttons,
             input: None,
             scroll: 0,
+            copy: None,
+            copy_requested: false,
         }
     }
 
@@ -185,7 +191,17 @@ impl Modal {
     }
 
     /// `Some(tag)` when a button was pressed (the modal closes), `None` to stay open.
+    /// Let `c` copy `text`.
+    pub fn with_copy(mut self, text: String) -> Self {
+        self.copy = Some(text);
+        self
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) -> Option<Option<String>> {
+        if key.code == KeyCode::Char('c') && self.copy.is_some() && self.input.is_none() {
+            self.copy_requested = true;
+            return None;
+        }
         if let Some(button) = self.buttons.iter().find(|b| b.keys.contains(&key.code)) {
             return Some(button.tag.clone());
         }
@@ -274,6 +290,15 @@ impl Modal {
             }
             spans.push(Span::styled(b.hint.clone(), theme::key()));
             spans.push(Span::raw(format!(" {}", b.label)));
+        }
+        if let Some(text) = &self.copy {
+            spans.push(Span::raw("   "));
+            spans.push(Span::styled("c", theme::key()));
+            spans.push(Span::raw(if text.contains('\n') {
+                " copy commands"
+            } else {
+                " copy command"
+            }));
         }
         Line::from(spans)
     }
@@ -556,7 +581,7 @@ fn status_in_line(line: &str) -> Option<Status> {
 pub fn draw_help(frame: &mut Frame, area: Rect, screen_keys: &[(&str, &str)]) {
     let mut lines = vec![
         Line::from(Span::styled("Moving around", theme::title())),
-        Line::from("  Arrows / j k        move, scroll"),
+        Line::from("  Arrows / h j k l    move, scroll"),
         Line::from("  PgUp PgDn g G       jump"),
         Line::from("  Tab                 other pane"),
         Line::from("  Mouse               click to select, wheel to scroll"),

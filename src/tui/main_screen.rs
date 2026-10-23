@@ -298,7 +298,7 @@ impl MainScreen {
 
         match action {
             Action::Char('r') => return vec![Effect::AskRun],
-            Action::Char('h') => return vec![Effect::History],
+            Action::Char('H') => return vec![Effect::History],
             _ => {}
         }
         if self.focus == PANE_TASKS {
@@ -704,7 +704,7 @@ impl MainScreen {
             }
             hints.push(("Esc", "back"));
         }
-        hints.extend([("r", "run"), ("h", "history"), ("?", "help"), ("q", "quit")]);
+        hints.extend([("r", "run"), ("H", "history"), ("?", "help"), ("q", "quit")]);
         hints
     }
 

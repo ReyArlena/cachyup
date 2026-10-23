@@ -2,7 +2,7 @@
 name = "cachyup"
 version = "0.1.0"
 edition = "2024"
-authors = ["Rey Arlena"]
+authors = ["ReyArlena"]
 description = "Set up and update a CachyOS install: system update, apps, tweaks and cleanup, with a TUI and a headless mode"
 license = "MIT"
 repository = "https://github.com/ReyArlena/cachyup"
@@ -21,7 +21,7 @@ path = "src/lib.rs"
 anyhow = "1.0.104"
 chrono = { version = "0.4.45", features = ["serde"] }
 clap = { version = "4.6.7", features = ["derive"] }
-crossterm = "0.29.0"
+crossterm = { version = "0.29.0", features = ["osc52"] }
 nix = { version = "0.31.3", features = ["signal", "process", "user"] }
 ratatui = "0.30.2"
 serde = { version = "1.0.229", features = ["derive"] }

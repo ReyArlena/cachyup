@@ -16,7 +16,8 @@ curl -fsSL https://reyarlena.github.io/cachyup/install.sh | sh
 ```
 
 This puts the `cachyup` binary in `~/.local/bin`. Run the same command again to update;
-cachyup tells you at launch when a new release is out. Run as your normal user, not root.
+cachyup tells you at launch when a new release is out (`c` in that popup copies the
+install command). Run as your normal user, not root.
 
 Remove it with `sh install.sh --uninstall`, or `--purge` to also delete settings and
 history.
@@ -42,12 +43,13 @@ whole session, so a long AUR build never stops at a password prompt.
 │ ✓ Install Tweaks            ││                                                       │
 │   2 of 3 selected           ││ AUR packages  18/18                                   │
 └─────────────────────────────┘└───────────────────────────────────────────────────────┘
- Space toggle  c options  r run  h history  ? help  q quit
+ Space toggle  c options  r run  H history  ? help  q quit
 ```
 
 The left pane lists the three tasks; `Space` switches one on or off. The right pane shows
-the highlighted task's options. Press `c` (or `Enter`, `Tab`, `→`) to move into them, and
-`Esc` to come back. Changes are saved as you make them.
+the highlighted task's options. Press `c` (or `Enter`, `Tab`, `→`/`l`) to move into them,
+and `Esc` (or `←`/`h`) to come back. Arrows and `h` `j` `k` `l` move everywhere, `?` lists
+the keys for the current screen. Changes are saved as you make them.
 
 | Task | Options |
 |------|---------|
@@ -62,9 +64,11 @@ Ticks are green and switched on; crosses are grey and switched off. Blue entries
 the left pane ticks off each step and the right pane shows the full terminal output.
 Select a step on the left to jump to its output. `q` offers to stop after the current step
 (safe) or right away. At the end a summary lists every failure and everything that needs
-attention.
+attention; `c` copies the commands it suggests (`pacdiff`, `systemctl restart`, `yay
+--rebuild`) to the clipboard. Popups do not capture the mouse, so their text can also be
+selected and copied as usual.
 
-`h` opens the history: past runs on the left, the selected run's output on the right,
+`H` opens the history: past runs on the left, the selected run's output on the right,
 `x` deletes one.
 
 ### Dry run
@@ -106,7 +110,7 @@ Only what is switched on, in this order:
 | Pacman / AUR / Flatpaks / Installers | Each selected app on its own: checked, installed, checked again. |
 | Tweaks | Each selected tweak, skipped while its app is not installed. |
 | Cleanup | Orphans, package cache (keeps 2 versions of installed packages, none of uninstalled ones), yay build cache older than 30 days, unused flatpak runtimes, `.pacnew` files for mirrorlists cachyos-rate-mirrors generates. |
-| Post-update checks | Report only: `.pacnew` files to merge, reboot needed, services running replaced binaries, AUR packages built against removed libraries. |
+| Post-update checks | Report only: `.pacnew` check, reboot check, service restart check (services running replaced binaries), AUR rebuild check (packages built against removed libraries). `PASS` when all is well, `ATTENTION` with the command to run otherwise. |
 
 Statuses: `SUCCESS` something was installed or changed, `SKIPPED` already in place or not
 applicable, `FAILED` see the output, `PASS` a check came out fine, `ATTENTION` something for

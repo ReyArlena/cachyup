@@ -107,7 +107,7 @@ fn run_modal_and_dry_run_complete() {
     assert!(text.contains("==> Summary") || text.contains("would run"));
 
     // History lists the run.
-    app.key_for_test(key(KeyCode::Char('h')));
+    app.key_for_test(key(KeyCode::Char('H')));
     let text = render(&mut app, 120, 36);
     assert_eq!(app.screen_name_for_test(), "history");
     assert!(text.contains("DRY"), "{text}");

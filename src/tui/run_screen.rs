@@ -165,7 +165,7 @@ impl RunScreen {
         match action {
             Action::Quit | Action::Back if self.running() => return vec![Effect::AskStop],
             Action::Quit | Action::Back => return vec![Effect::CloseRun],
-            Action::Char('h') if !self.running() => return vec![Effect::History],
+            Action::Char('H') if !self.running() => return vec![Effect::History],
             Action::NextPane | Action::PrevPane => self.focus = 1 - self.focus,
             Action::Left => self.focus = PANE_STEPS,
             Action::Right => self.focus = PANE_OUTPUT,
@@ -241,7 +241,7 @@ impl RunScreen {
         if self.running() {
             hints.push(("q", "stop"));
         } else {
-            hints.extend([("Esc", "back"), ("h", "history")]);
+            hints.extend([("Esc", "back"), ("H", "history")]);
         }
         hints.push(("?", "help"));
         hints

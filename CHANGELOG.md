@@ -23,7 +23,10 @@ The bash script rewritten as a Rust terminal UI.
 - Dry run (`d` in the run dialog, or `--dry-run`): every check runs, nothing changes.
 - Run screen with live progress and full output; history screen for past runs.
 - `--run` to run the saved settings without the interface, `--reset` to start over.
-- Update check at launch.
+- Update check at launch; `c` copies the install command.
+- `c` in the end-of-run summary copies the suggested commands (`pacdiff`, `systemctl
+  restart`, `yay --rebuild`) to the clipboard.
+- Mouse support (click, wheel); popups release the mouse so their text can be selected.
 - Installed from a prebuilt binary (`install.sh`), like kiln.
 
 ### Changed
@@ -31,7 +34,8 @@ The bash script rewritten as a Rust terminal UI.
 - Settings moved from `~/.config/cachyup/apps` to `config.toml` and `selection.toml`.
 - Logs moved to `~/.local/state/cachyup/runs/<date>/`.
 - Post-update findings are `ATTENTION` instead of `FAILED`, so the failure count only
-  counts real failures.
+  counts real failures. The checks have neutral names (`Reboot check` instead of `Reboot
+  not required`), so a finding never reads as the opposite of what it means.
 
 [Unreleased]: https://github.com/ReyArlena/cachyup/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/ReyArlena/cachyup/releases/tag/v0.1.0

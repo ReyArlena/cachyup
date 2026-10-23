@@ -102,7 +102,7 @@ impl HistoryScreen {
             other => other,
         };
         match action {
-            Action::Back | Action::Char('h') => {
+            Action::Back | Action::Char('H') => {
                 if self.focus == PANE_LOG && action == Action::Back {
                     self.focus = PANE_RUNS;
                     return Vec::new();

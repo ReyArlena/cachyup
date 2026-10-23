@@ -64,6 +64,9 @@ pub struct App {
     /// A real run waiting for sudo.
     pending_run: bool,
     exit: Option<Exit>,
+    /// Whether the terminal currently sends mouse events to us. Off while a
+    /// popup is open, so its text can be selected and copied normally.
+    mouse_on: bool,
 }
 
 impl App {
@@ -113,6 +116,7 @@ impl App {
             dry_only,
             pending_run: false,
             exit: None,
+            mouse_on: true,
             state,
         }
     }
@@ -122,8 +126,20 @@ impl App {
         terminal: &mut DefaultTerminal,
         input: &Receiver<TermEvent>,
     ) -> Result<Exit> {
+        // The caller turns mouse capture on before every (re)start.
+        self.mouse_on = true;
         loop {
             terminal.draw(|f| self.draw(f))?;
+            let want_mouse = self.modal.is_none();
+            if want_mouse != self.mouse_on {
+                use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+                let _ = if want_mouse {
+                    crossterm::execute!(std::io::stdout(), EnableMouseCapture)
+                } else {
+                    crossterm::execute!(std::io::stdout(), DisableMouseCapture)
+                };
+                self.mouse_on = want_mouse;
+            }
             if let Some(exit) = self.exit.take() {
                 return Ok(exit);
             }
@@ -207,7 +223,8 @@ impl App {
                     ),
                     Button::new(&[KeyCode::Esc, KeyCode::Char('q')], "Esc", "later", None),
                 ],
-            );
+            )
+            .with_copy(INSTALL_CMD.to_string());
             if self.modal.is_none() && self.run.is_none() {
                 self.modal = Some(modal);
             } else {
@@ -222,7 +239,14 @@ impl App {
                 return;
             }
             if let Some(modal) = &mut self.modal {
-                if let Some(tag) = modal.handle_key(*key) {
+                let outcome = modal.handle_key(*key);
+                if modal.copy_requested {
+                    modal.copy_requested = false;
+                    let text = modal.copy.clone().unwrap_or_default();
+                    self.copy_to_clipboard(&text);
+                    return;
+                }
+                if let Some(tag) = outcome {
                     let value = modal.input_value();
                     self.modal = None;
                     if let Some(tag) = tag {
@@ -517,6 +541,42 @@ impl App {
         self.screen = Screen::Run;
     }
 
+    /// wl-copy (Wayland) or xclip when present, otherwise the terminal's
+    /// OSC 52 clipboard escape.
+    fn copy_to_clipboard(&mut self, text: &str) {
+        let piped = |program: &str, args: &[&str]| -> bool {
+            use std::io::Write;
+            use std::process::{Command, Stdio};
+            let Ok(mut child) = Command::new(program)
+                .args(args)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+            else {
+                return false;
+            };
+            let wrote = child
+                .stdin
+                .take()
+                .is_some_and(|mut s| s.write_all(text.as_bytes()).is_ok());
+            wrote && child.wait().is_ok_and(|s| s.success())
+        };
+        let copied = (std::env::var_os("WAYLAND_DISPLAY").is_some() && piped("wl-copy", &[]))
+            || (std::env::var_os("DISPLAY").is_some()
+                && piped("xclip", &["-selection", "clipboard"]))
+            || {
+                use crossterm::clipboard::CopyToClipboard;
+                crossterm::execute!(std::io::stdout(), CopyToClipboard::to_clipboard_from(text))
+                    .is_ok()
+            };
+        self.toast(if copied {
+            "copied to clipboard"
+        } else {
+            "could not copy"
+        });
+    }
+
     fn toast(&mut self, text: &str) {
         self.toast = Some((text.to_string(), Instant::now()));
     }
@@ -708,7 +768,7 @@ fn summary_modal(record: &crate::engine::RunRecord) -> Modal {
     } else {
         "Run finished"
     };
-    Modal::new(
+    let modal = Modal::new(
         title,
         body,
         vec![Button::new(
@@ -717,7 +777,19 @@ fn summary_modal(record: &crate::engine::RunRecord) -> Modal {
             "close",
             None,
         )],
-    )
+    );
+    // Steps that need a human end their reason with "run: <command>".
+    let commands: Vec<String> = record
+        .steps
+        .iter()
+        .filter_map(|s| s.outcome.as_ref()?.reason.as_ref())
+        .filter_map(|r| r.split_once("run: ").map(|(_, cmd)| cmd.to_string()))
+        .collect();
+    if commands.is_empty() {
+        modal
+    } else {
+        modal.with_copy(commands.join("\n"))
+    }
 }
 
 /// The newest release tag if it is newer than this build.
@@ -789,6 +861,36 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn summary_copies_the_commands_to_run() {
+        use crate::engine::{Outcome, RunRecord, StepRecord};
+        let step = |name: &str, outcome: Outcome| StepRecord {
+            group: "Post-update checks".into(),
+            name: name.into(),
+            outcome: Some(outcome),
+        };
+        let record = RunRecord {
+            id: "x".into(),
+            version: "0".into(),
+            started: chrono::Local::now(),
+            finished: None,
+            dry_run: false,
+            tasks: vec![],
+            steps: vec![
+                step(
+                    ".pacnew check",
+                    Outcome::attention("4 to merge, run: DIFFPROG=meld pacdiff --sudo"),
+                ),
+                step("Reboot check", Outcome::attention("kernel was updated")),
+                step("AUR rebuild check", Outcome::pass()),
+            ],
+            ended_early: None,
+            managed: vec![],
+        };
+        let modal = summary_modal(&record);
+        assert_eq!(modal.copy.as_deref(), Some("DIFFPROG=meld pacdiff --sudo"));
+    }
 
     #[test]
     fn versions_compare_numerically() {
