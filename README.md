@@ -1,240 +1,255 @@
 # cachyup
 
-One command to set up a fresh CachyOS install: packages, app installers, config tweaks.
-Idempotent, so re-running it is always safe, and re-running is how you update: it rates
-mirrors, updates repo, AUR and flatpak packages, installs anything new in the lists, skips
-everything already done, cleans up, and reports what needs a human (`.pacnew` files, a
-pending reboot, AUR packages needing a rebuild).
-All the slow parts run first with no prompts, so you can start it, go and make tea, and come
-back to a summary.
+One command to set up and update a CachyOS install: a full system update with cleanup,
+your apps (pacman, AUR, flatpak, install scripts), config tweaks for those apps, and a
+summary of anything that needs a human (`.pacnew` files, a pending reboot, services to
+restart, AUR packages to rebuild).
 
-## Usage
+It is a terminal UI. Pick what to run, press `r`, go and make tea. Every run is logged, and
+the history screen shows past runs with their full output. Re-running is always safe: every
+step checks the real end state first and skips what is already done.
 
-Fresh machine:
+## Install
 
 ```bash
-curl -fsSL https://reyarlena.github.io/cachyup/install.sh | bash
+curl -fsSL https://reyarlena.github.io/cachyup/install.sh | sh
 ```
 
-This clones the repo to `~/.local/share/cachyup`, runs `run.sh`, and puts a `cachyup`
-command on your PATH. At the start you are asked for your sudo password and which apps this
-machine wants (see [App selection](#app-selection)). Nothing else needs input until the end.
+This puts the `cachyup` binary in `~/.local/bin`. Run the same command again to update;
+cachyup tells you at launch when a new release is out. Run as your normal user, not root.
 
-Every run after that:
+Remove it with `sh install.sh --uninstall`, or `--purge` to also delete settings and
+history.
+
+## Using it
 
 ```bash
 cachyup
 ```
 
-`cachyup` is a symlink at `~/.local/bin/cachyup` pointing at `install.sh` inside the clone.
-`install.sh` pulls the latest version of the repo and runs `run.sh`, so a plain `cachyup`
-is "update the system and apply whatever changed in the lists". Preflight checks that
-`~/.local/bin` is on your PATH and reports FAILED if not; the link is still created.
-
-There are no options. Apps added to the lists since your last run are asked about at the
-start, and every run offers to customise the full selection.
-
-Run as your normal user, not root. The script refuses to run as root because AUR builds and
-home-directory config must be owned by you.
-
-## What a run looks like
+At launch cachyup asks for your sudo password in the plain terminal (skipped if sudo
+already has a ticket), then opens. The ticket is kept fresh in the background for the
+whole session, so a long AUR build never stops at a password prompt.
 
 ```
-==> Preflight
-Running as normal user......................PASS
-Running on CachyOS..........................PASS
-Internet connection.........................PASS
-Sudo access.................................PASS
-~/.local/bin on PATH........................PASS
-gum.........................................SKIPPED (already present)
-Apps........................................PASS (2 new: 1 install, 1 skip)
-
-==> Pacman packages
-discord.....................................SKIPPED (already present)
-flatpak.....................................SUCCESS
-
-==> AUR packages
-phpstorm....................................SKIPPED (deselected)
-spotify.....................................SUCCESS
-spotfiy.....................................FAILED (not found)
-
-==> Installers
-Claude Code.................................SKIPPED (already present)
-
- ==> Summary
-   (every heading and status line again, with nothing in between)
-
-3 succeeded, 3 skipped, 1 failed
-Command output for each failure is in the log, directly above its FAILED line.
-
-Log: ~/.local/state/cachyup/20261020-221500.log
-
-Press o to open the log, any other key to finish
+┌ Tasks ──────────────────────┐┌ Install Apps options ─────────────────────────────────┐
+│ ✓ Full System Update        ││ Pacman packages  101/102                              │
+│   10 of 10 steps            ││ ✓ discord                              Installed      │
+│                             ││     ✓ Disable host update              Applied        │
+│ ✓ Install Apps              ││ ✓ docker                               Installed      │
+│   136 selected, 2 to install││ ✗ junction  using DMS Open             Not installed  │
+│                             ││ ✓ zed                     new          Not installed  │
+│ ✓ Install Tweaks            ││                                                       │
+│   2 of 3 selected           ││ AUR packages  18/18                                   │
+└─────────────────────────────┘└───────────────────────────────────────────────────────┘
+ Space toggle  c options  r run  h history  ? help  q quit
 ```
 
-The log holds everything the screen showed: headings, full command output, and a status line
-per step. Search it for `FAILED` and the command output sits directly above.
+The left pane lists the three tasks; `Space` switches one on or off. The right pane shows
+the highlighted task's options. Press `c` (or `Enter`, `Tab`, `→`) to move into them, and
+`Esc` to come back. Changes are saved as you make them.
 
-Status meanings: `SUCCESS` something was installed or changed, `SKIPPED` already in place,
-`FAILED` look at the log, `PASS` a check that changes nothing (not counted).
+| Task | Options |
+|------|---------|
+| Full System Update | Each step on or off: rate mirrors, keyrings, `pacman -Syu`, `yay -Sua`, `flatpak update`, and the cleanup steps. Numbers: mirror rating cooldown, package cache versions, yay cache age, runs kept in history. |
+| Install Apps | Every app in the list, grouped by source, with a status column (Installed, Not installed, Unavailable). Tweaks for an app are listed under it. `i` shows the description and package details, `/` filters, `a` switches a whole group. |
+| Install Tweaks | The same tweaks as a flat list, with Applied / Not applied. Toggling here and under the app is the same switch. |
 
-## Phases
+Ticks are green and switched on; crosses are grey and switched off. Blue entries with a
+`new` badge were added in a cachyup update and start switched off.
 
-Phases live in `phases/` and run in filename order.
+`r` asks for confirmation: `Enter` runs, `d` does a dry run, `Esc` cancels. While running,
+the left pane ticks off each step and the right pane shows the full terminal output.
+Select a step on the left to jump to its output. `q` offers to stop after the current step
+(safe) or right away. At the end a summary lists every failure and everything that needs
+attention.
 
-| Phase | What it does |
-|-------|--------------|
-| `10-preflight.sh` | Not root, CachyOS, internet, sudo, PATH, gum, the app questions. Then rate mirrors, keyrings, `pacman -Syu`, `yay -Sua`, `flatpak update`, the tools the script itself needs, and the `cachyup` command. |
-| `20-packages.sh` | Pacman, then AUR (yay), then Flatpak (flathub), then conditional packages. All the long waits. |
-| `30-installers.sh` | Apps with their own install script, e.g. Claude Code. |
-| `40-config.sh` | Static config tweaks, e.g. Discord no self-update. |
-| `80-cleanup.sh` | Orphans, package cache (keeps 2 versions of installed, none of uninstalled), yay build cache older than 30 days, unused flatpak runtimes. Then checks: `.pacnew` files, reboot needed, services needing a restart, AUR rebuilds. |
-| `90-finish.sh` | Summary, log path, the only prompt. |
+`h` opens the history: past runs on the left, the selected run's output on the right,
+`x` deletes one.
 
-## Adding things
+### Dry run
 
-### A package
+A dry run changes nothing. Every check still runs for real (is it installed, is it
+available, are there orphans, which `.pacnew` files exist), and every command that would
+change something is logged as `would run: ...` with a `WOULD RUN` status. Use it to see what
+a run will do. `cachyup --dry-run` opens the interface with real runs switched off.
 
-Add one line to the right file in `packages/`. Comments with `#` are fine.
-
-| File | Installed with |
-|------|----------------|
-| `prerequisites.txt` | pacman, before everything else |
-| `pacman.txt` | `pacman -S --needed --noconfirm` |
-| `aur.txt` | `yay -S --needed --noconfirm` |
-| `flatpak.txt` | `flatpak install -y --noninteractive flathub` |
-
-Each package is checked before the install (`SKIPPED` if present, `FAILED (not found)` if no
-source has it), installed on its own, then checked again for its final `SUCCESS` or `FAILED`.
-One package per call is a little slower than one big transaction but every package gets its
-own honest result and reason.
-
-Real package names only. Groups (`gnome`) and virtual names (`jack`) are not resolved and
-show as not found.
-
-### App selection
-
-The lists say what exists. Which of it this machine wants is decided in two gum screens at the
-start of the run, before the long update, and saved to `~/.config/cachyup/apps`:
-
-1. **New apps.** Any list line with no decision saved yet is shown, one multi-select per
-   source (pacman, AUR, flatpak), everything pre-checked. Untick what you do not want, enter
-   confirms. On the first run that is the whole list. Skipped entirely when nothing is new,
-   so adding a package to a list is what makes the question appear on every machine.
-2. **Customise the full app selection?** Asked every run, default No, so Enter carries on.
-   Yes shows every package with the current selection pre-checked.
-
-Esc or Ctrl-C on a screen aborts the run rather than counting as "skip everything".
-
-`~/.config/cachyup/apps` has one line per package, `kind/name` and a state:
-
-| State | Meaning |
-|-------|---------|
-| `install` | Wanted. Installed when absent, retried each run until it succeeds. |
-| `done` | cachyup installed it, or found it already present, at least once. Hands off from then on: if it goes missing later you removed it on purpose, and it is not reinstalled. |
-| `skip` | Unticked. Never installed. |
-
-The file records what cachyup did and what you chose, never what the system has right now,
-so it does not go stale. The status line says which: `SKIPPED (already present)`,
-`SKIPPED (deselected)`, `SKIPPED (removed manually)`. To get a removed package back, say Yes
-to the customise question and tick it again. Packages dropped from a list are forgotten, so
-adding them back asks again. `prerequisites.txt` is never asked about.
-
-### A conditional package
-
-A package that should only be installed in some situations gets a script in `conditional/`
-instead of a line in a list. Same shape as an installer (below), using the package helpers
-from `lib/pkg.sh`. Set `SKIP_REASON` in `check()` to say why it was skipped:
+### Without the interface
 
 ```bash
-NAME="junction (pacman)"
-check() {
-    pacman_installed junction && return 0
-    has_cmd dms && { SKIP_REASON="using DMS Open"; return 0; }
-    return 1
-}
-run() { pacman_install junction; }
+cachyup --run              # run the saved settings, print the output, exit
+cachyup --run --dry-run    # same, changing nothing
 ```
 
-```
-junction (pacman)...........................SKIPPED (using DMS Open)
-```
+For scripts and cron. The first `Ctrl-C` stops after the current step, the second stops
+now. Exit code 0 means nothing failed, 1 means a step failed, 2 an error, 3 the run was
+stopped or aborted early.
 
-### An installer or a config tweak
-
-Add a file to `installers/` or `config/`. It is sourced in a subshell and must define:
+### Start over
 
 ```bash
-NAME="Thing"            # label for the status line
-check() { ...; }        # exit 0 if already done  ->  SKIPPED
-                        #   set SKIP_REASON first to replace "already present"
-run()   { ...; }        # do it; non-zero exit    ->  FAILED (last line of output)
+cachyup --reset
 ```
 
-Everything in `lib/` is available: `has_cmd`, `json_get`, `json_set`, `ini_get`,
-`ini_set`, `write_file`, `copy_file`, `read_list`, `status`, `note`. See `installers/claude.sh`,
-`config/discord.sh` and `config/junction-default.sh`.
+Deletes every setting, all state and the run history (asks first, `--yes` to skip), so the
+next launch behaves like a fresh install.
 
-Writing files: use `write_file FILE` (content on stdin), `copy_file SRC DST`, `json_set` or
-`ini_set`. They create parent directories and write *through* symlinks, so a stow-managed
-file stays a symlink and the change lands in the dotfiles repo. Never `mv`, `install` or
-`ln -sf` over an existing path; those replace the link with a plain file. No backups are
-made: this tool is meant for fresh systems.
+## What a run does
 
-Rules for `check()`: test the actual end state (binary exists, key has the right value), not
-whether the script ran before. That is what makes re-runs safe.
+Only what is switched on, in this order:
 
-### A new phase
+| Group | Steps |
+|-------|-------|
+| Preflight | Running on CachyOS, internet, sudo, pacman not already running, `~/.local/bin` on PATH. A failure stops the run. |
+| System update | Rate mirrors (skipped within the cooldown), keyrings, `pacman -Syu`, `yay -Sua`, `flatpak update`. |
+| Prerequisites | Packages cachyup needs (`yay`, `base-devel`, `pacman-contrib`, ...). Always installed. |
+| Pacman / AUR / Flatpaks / Installers | Each selected app on its own: checked, installed, checked again. |
+| Tweaks | Each selected tweak, skipped while its app is not installed. |
+| Cleanup | Orphans, package cache (keeps 2 versions of installed packages, none of uninstalled ones), yay build cache older than 30 days, unused flatpak runtimes, `.pacnew` files for mirrorlists cachyos-rate-mirrors generates. |
+| Post-update checks | Report only: `.pacnew` files to merge, reboot needed, services running replaced binaries, AUR packages built against removed libraries. |
 
-Add `phases/NN-name.sh`. It is sourced by `run.sh` with all of `lib/` loaded. Use
-`heading` once at the top, then:
+Statuses: `SUCCESS` something was installed or changed, `SKIPPED` already in place or not
+applicable, `FAILED` see the output, `PASS` a check came out fine, `ATTENTION` something for
+you to do (the reason says what), `WOULD RUN` dry run.
 
-- `step NAME CHECK_FN ACTION_FN` for one thing. `CHECK_FN` and `ACTION_FN` are function names
-  called with no arguments; wrap anything needing arguments or quotes in a small function.
-- `install_list KIND FILE` for a package list honouring the app selection, `install_list KIND
-  FILE always` for one that is always installed.
-- `run_scripts DIR` for a directory of `NAME`/`check`/`run` scripts.
-- `require NAME CHECK_FN MSG` for a check that must pass (aborts), `check NAME CHECK_FN MSG`
-  for one that just reports.
+Installing one package per call is a little slower than one big transaction, but every
+package gets its own honest result and reason.
 
-## Unattended install notes
+## Apps and tweaks
 
-- `--noconfirm` answers the default to pacman prompts. On a package conflict the default is
-  "do not remove", so the install fails. Remove the conflicting package in an earlier step.
-- Flatpaks are installed system-wide, the flatpak default. Polkit allows that without a
-  password from an active desktop session; over SSH or from a bare TTY it would ask for admin
-  auth. Run from a terminal on the desktop.
-- Ctrl-C stops the run; output streams into the log as it happens, so nothing is lost, and the
-  log ends with `INTERRUPTED`. Re-run to carry on.
-- Some AUR packages verify PGP signatures. Import the key in a config script that runs before
-  the AUR phase if one is ever needed.
-- The sudo ticket is refreshed in the background for the whole run, so a long AUR build does
-  not leave a password prompt waiting for you.
-- The post-update checks never act on their own. `.pacnew` files are listed for `pacdiff --sudo`,
-  a kernel update is reported for you to reboot, services running replaced binaries come with
-  the `systemctl restart` line, and AUR rebuilds with the `yay` line. `checkrebuild` is slow,
-  so it starts in the background after the AUR update and its result is collected at the end.
-  Packages that only repack upstream binaries (`-bin`, AppImages, the JetBrains IDEs, Chrome,
-  Spotify, Discord PTB) are listed but not advised: rebuilding them changes nothing. The list
-  of such names is `PREBUILT_PATTERNS` in `phases/80-cleanup.sh`.
-- The update and cleanup steps mirror what CachyOS's own `cachy-update` does interactively
-  (a fork of Arch-Update), minus the questions. `cachy-update` itself is in `pacman.txt`; its
-  package autostarts the tray applet system-wide, for day-to-day updates between `cachyup`
-  runs. The two do not conflict.
+### Your selection
+
+Every app and tweak is on or off, saved in `~/.config/cachyup/selection.toml`. Switching an
+app off never uninstalls it.
+
+- **First launch:** everything is on, except entries with a condition. Junction (a link
+  chooser) is off when DankMaterialShell is installed, because DMS Open does the same job.
+- **cachyup adds an app in an update:** a popup at launch lists the new entries. They start
+  off, shown in blue with a `new` badge for that session. `Enter` jumps to the list to
+  review them.
+- **You uninstall an app cachyup installed:** at the next launch it is switched off, with a
+  popup saying so, so it is not reinstalled behind your back. Switch it on to get it back.
+- **An app is dropped from the list:** it is forgotten. If it comes back later it counts as
+  new.
+
+### Adding your own
+
+Create `~/.config/cachyup/user-apps.toml`. Same layout as cachyup's own
+[`catalog.toml`](catalog.toml):
+
+```toml
+pacman = ["htop", "btop"]
+aur = ["pfetch"]
+flatpak = ["org.gnome.Chess", { name = "com.example.App", description = "My app" }]
+
+[[installer]]
+name = "my-tool"
+check = "~/.local/bin/my-tool"          # a path or a command on PATH; present = installed
+install = "curl -fsSL https://example.com/install.sh | sh"
+
+[[tweak]]
+id = "htop-tree"
+app = "pacman/htop"                      # shown under htop, skipped while it is missing
+name = "Tree view"
+set = [{ ini = "~/.config/htop/htoprc", section = "x", key = "tree_view", value = 1 }]
+```
+
+Your entries start switched on the first time they are seen. An entry that repeats one of
+cachyup's own is ignored, and a popup at launch says so. So does a name listed under two
+sources, or a file that does not parse.
+
+Tweak values are written with `{ json = FILE, key = "a.b", value = ... }` (a dotted JSON
+key) or `{ ini = FILE, section = "S", key = "k", value = "v" }`. Files are written through
+symlinks, so a stow-managed dotfile stays a symlink and the change lands in your dotfiles
+repo.
+
+Descriptions come from the package sources: `pacman -Si` for repo packages, the AUR web
+API, and the flathub listing. They are cached in `~/.cache/cachyup/info.json`, so the list
+shows them straight away next time.
+
+## Files
+
+| Path | What |
+|------|------|
+| `~/.config/cachyup/config.toml` | Tasks, update steps, cleanup numbers |
+| `~/.config/cachyup/selection.toml` | On/off for every app and tweak |
+| `~/.config/cachyup/user-apps.toml` | Your own apps and tweaks (optional) |
+| `~/.local/state/cachyup/state.toml` | What cachyup has seen and installed (not for editing) |
+| `~/.local/state/cachyup/runs/<date>/output.log` | Everything a run printed |
+| `~/.local/state/cachyup/runs/<date>/run.json` | The run's summary, rewritten after every step |
+| `~/.cache/cachyup/info.json` | Package descriptions |
+
+All three settings files are plain TOML and fine to edit by hand while cachyup is closed.
+
+## Notes
+
+- **Sudo.** Only commands that need root use it: pacman, paccache, checkservices, rate
+  mirrors. yay, flatpak and install scripts run as you (yay calls sudo itself). Every
+  elevated call uses `sudo -n`, so nothing can ever ask for a password mid-run; without a
+  ticket the step fails instead of hanging.
+- **No prompts.** Commands get no input. `--noconfirm` answers pacman's default, so on a
+  package conflict (default "do not remove") the install fails rather than waiting.
+- **Stopping.** Commands run in their own process group, so `Ctrl-C` never reaches pacman
+  mid-transaction. Output streams into the log as it happens; an interrupted run is still
+  in the history.
+- **Flatpaks** are installed system-wide. Polkit allows that without a password from an
+  active desktop session; over SSH or from a bare TTY it would ask. Run from a terminal on
+  the desktop.
+- **Post-update checks never act.** `.pacnew` files are listed for `pacdiff --sudo`, a
+  kernel update is reported for you to reboot, services come with the `systemctl restart`
+  line, AUR rebuilds with the `yay` line. Packages that only repack upstream binaries
+  (`-bin`, AppImages, the JetBrains IDEs, Chrome, Spotify, Discord PTB) are listed but not
+  advised: rebuilding them changes nothing.
+- **cachy-update.** The update and cleanup steps mirror what CachyOS's own `cachy-update`
+  does interactively, minus the questions. `cachy-update` is in the app list for
+  day-to-day updates between cachyup runs; the two do not conflict.
+
+## Develop
+
+```bash
+cargo build
+cargo run                       # the interface
+cargo run -- --run --dry-run    # headless dry run
+cargo test                      # unit tests and tests/tui_render.rs
+cargo clippy --all-targets
+cargo fmt
+```
+
+To try it on a scratch config without touching your own, point the XDG directories
+somewhere else:
+
+```bash
+XDG_CONFIG_HOME=/tmp/c XDG_STATE_HOME=/tmp/s XDG_CACHE_HOME=/tmp/k cargo run -- --dry-run
+```
+
+Install a local build with `cargo build --release && install -m755 target/release/cachyup ~/.local/bin/`.
+
+Releases: tag `vX.Y.Z` and push the tag. GitHub Actions builds a static binary and attaches
+it to the release, which is what `install.sh` downloads.
+
+### Adding to the built-in list
+
+Edit [`catalog.toml`](catalog.toml) (compiled into the binary). A unit test fails if an
+entry is listed twice or a tweak points at an app that does not exist. Use real package
+names: groups (`gnome`) and virtual names (`jack`) show as Unavailable.
 
 ## Layout
 
 ```
-install.sh       entry point: clone or update the repo, then exec run.sh
-run.sh           loads lib/, runs phases/ in order
-lib/log.sh       status lines, step(), log file, summary
-lib/utils.sh     require/check, sudo keepalive, read_list, run_scripts
-lib/files.sh     write_file, copy_file, json_get, json_set, ini_get, ini_set
-lib/pkg.sh       install_list + pacman/aur/flatpak backends
-lib/apps.sh      app selection: the two questions and ~/.config/cachyup/apps
-phases/          ordered stages
-packages/        package list files
-conditional/     NAME/check/run scripts for packages with an install condition
-installers/      NAME/check/run scripts for curl-style installers
-config/          NAME/check/run scripts for config tweaks
+catalog.toml          the built-in app and tweak list
+install.sh            downloads the release binary
+src/catalog.rs        catalog + user-apps.toml parsing, duplicate detection
+src/config.rs         config.toml, the update steps and their dependencies
+src/selection.rs      selection.toml and launch-time reconciliation (new, removed)
+src/state.rs          state.toml
+src/system.rs         read-only probes: installed packages, package info
+src/sudo.rs           ask once, keep the ticket alive
+src/app.rs            loads everything, shared by the TUI and --run
+src/cli.rs            command line, headless run
+src/engine/           the plan, every step, the runner, run records
+src/tui/              the interface
 ```
+
+## License
+
+MIT

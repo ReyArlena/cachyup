@@ -1,46 +1,93 @@
-#!/usr/bin/env bash
-# Entry point. Clones (or updates) the repo, then hands off to run.sh.
+#!/bin/sh
+# Installs (or removes) cachyup from the latest GitHub release.
 #
-# First run on a fresh machine (works from fish, bash or zsh):
-#   curl -fsSL https://reyarlena.github.io/cachyup/install.sh | bash
+#   curl -fsSL https://reyarlena.github.io/cachyup/install.sh | sh     # install or update
+#   sh install.sh --uninstall     # remove the binary
+#   sh install.sh --purge         # remove the binary, settings, state and run history
 #
-# Every run after that, from the `cachyup` command run.sh puts on PATH
-# (a symlink to this file inside the clone). Running from inside a clone
-# updates and uses that clone; running via curl uses ~/.local/share/cachyup.
-#
-# The whole script is a function called on the last line, so bash parses all
-# of it before running any of it: a download cut short runs nothing.
-set -euo pipefail
+# Installs to ~/.local/bin/cachyup (override with CACHYUP_BIN_DIR). Run it
+# again at any time to update. cachyup runs as your normal user and asks for
+# sudo itself, so this script refuses to run as root.
+# To build from source instead, see the Develop section of the README.
+set -e
 
-main() {
-    local repo_url="${CACHYUP_REPO:-https://github.com/ReyArlena/cachyup.git}"
-    local install_dir="${CACHYUP_DIR:-$HOME/.local/share/cachyup}"
+REPO="ReyArlena/cachyup"
+BIN_DIR="${CACHYUP_BIN_DIR:-$HOME/.local/bin}"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cachyup"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/cachyup"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/cachyup"
 
-    # Running from a clone (via the symlink or directly)? Use that clone.
-    # Piped from curl, $0 is just "bash" and must not be resolved against cwd.
-    local self_dir
-    if [[ "$0" == */* && -f "$0" ]]; then
-        self_dir="$(dirname "$(readlink -f "$0")")"
-        if [[ -f "$self_dir/run.sh" ]]; then
-            install_dir="$self_dir"
+if [ "$(id -u)" = "0" ]; then
+    echo "Run this as your normal user, not root: cachyup asks for sudo when it needs it." >&2
+    exit 1
+fi
+
+case "$1" in
+    --uninstall|--purge)
+        if [ -e "$BIN_DIR/cachyup" ] || [ -L "$BIN_DIR/cachyup" ]; then
+            rm -f "$BIN_DIR/cachyup"
+            echo "Removed $BIN_DIR/cachyup"
+        else
+            echo "cachyup was not installed in $BIN_DIR"
         fi
-    fi
+        if [ "$1" = "--purge" ]; then
+            rm -rf "$CONFIG_DIR" "$STATE_DIR" "$CACHE_DIR"
+            echo "Removed $CONFIG_DIR, $STATE_DIR and $CACHE_DIR"
+        else
+            echo "Settings and run history kept in $CONFIG_DIR and $STATE_DIR (use --purge to remove)"
+        fi
+        exit 0
+        ;;
+    "") ;;
+    *)
+        echo "Usage: install.sh [--uninstall | --purge]" >&2
+        exit 1
+        ;;
+esac
 
-    if ! command -v git &>/dev/null; then
-        echo "==> Installing git"
-        sudo pacman -S --needed --noconfirm git
-    fi
+if ! command -v curl >/dev/null 2>&1; then
+    echo "curl is required" >&2
+    exit 1
+fi
 
-    if [[ -d "$install_dir/.git" ]]; then
-        echo "==> Updating $install_dir"
-        git -C "$install_dir" pull --ff-only
-    else
-        echo "==> Cloning into $install_dir"
-        git clone "$repo_url" "$install_dir"
-    fi
+# CachyOS is x86_64 only.
+case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64) ASSET="cachyup-linux-x86_64" ;;
+    *)
+        echo "No prebuilt binary for $(uname -s) $(uname -m)." >&2
+        echo "Build from source instead: see the Develop section of the README." >&2
+        exit 1
+        ;;
+esac
+url="https://github.com/$REPO/releases/latest/download/$ASSET"
 
-    # When piped from curl, stdin is the script itself. Give run.sh the terminal.
-    exec bash "$install_dir/run.sh" "$@" </dev/tty
-}
+mkdir -p "$BIN_DIR"
+# Download to a temp file first, then move into place, so a failed download
+# never leaves a truncated binary behind. The move also replaces the symlink
+# that older (bash) versions of cachyup put here.
+tmp=$(mktemp "$BIN_DIR/.cachyup.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
 
-main "$@"
+echo "Downloading $url"
+if ! curl -fsSL "$url" -o "$tmp"; then
+    echo "Download failed. Check https://github.com/$REPO/releases, or build from source (see the README)." >&2
+    exit 1
+fi
+chmod 755 "$tmp"
+mv -f "$tmp" "$BIN_DIR/cachyup"
+trap - EXIT
+
+echo
+echo "Installed $BIN_DIR/cachyup ($("$BIN_DIR/cachyup" --version 2>/dev/null || echo 'version unknown'))"
+case ":$PATH:" in
+    *":$BIN_DIR:"*)
+        echo "Run: cachyup"
+        ;;
+    *)
+        echo "Note: $BIN_DIR is not on your PATH. Add it, or run: $BIN_DIR/cachyup"
+        ;;
+esac
+if [ -d "$HOME/.local/share/cachyup/.git" ]; then
+    echo
+    echo "The old bash version's clone is still at ~/.local/share/cachyup; it is no longer used and can be deleted."
+fi
