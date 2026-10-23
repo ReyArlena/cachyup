@@ -87,8 +87,22 @@ impl AppState {
         self.state.managed.remove(key);
     }
 
-    pub fn set_tweak(&mut self, id: &str, on: bool) {
+    /// Flip a tweak. Turning one on also turns its app on when that app is
+    /// not installed, or the tweak would be skipped on every run. Returns the
+    /// app key it switched on, if any. An installed app is left alone: it may
+    /// be off on purpose, and the tweak applies either way.
+    pub fn set_tweak(&mut self, id: &str, on: bool) -> Option<String> {
         self.selection.tweaks.insert(id.to_string(), on);
+        if !on {
+            return None;
+        }
+        let key = self.catalog.tweak(id)?.app.clone()?;
+        let app = self.catalog.app(&key)?;
+        if self.selection.app_on(&key) || self.is_installed(app) == Some(true) {
+            return None;
+        }
+        self.set_app(&key, true);
+        Some(key)
     }
 
     /// After a real run: remember what is now installed, and re-read the system.
@@ -119,3 +133,68 @@ impl AppState {
 pub fn is_root() -> bool {
     nix::unistd::Uid::effective().is_root()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn turning_a_tweak_on_turns_on_its_missing_app() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::under(dir.path());
+        std::fs::create_dir_all(&paths.config_dir).unwrap();
+        std::fs::create_dir_all(paths.home.join("bin")).unwrap();
+        std::fs::write(paths.home.join("bin/present"), "").unwrap();
+        std::fs::write(
+            paths.user_apps_file(),
+            r#"
+[[installer]]
+name = "missing"
+check = "~/bin/missing"
+install = "true"
+
+[[installer]]
+name = "present"
+check = "~/bin/present"
+install = "true"
+
+[[tweak]]
+id = "t-missing"
+app = "installer/missing"
+name = "t"
+default = false
+set = [{ json = "~/a.json", key = "k", value = 1 }]
+
+[[tweak]]
+id = "t-present"
+app = "installer/present"
+name = "t"
+default = false
+set = [{ json = "~/a.json", key = "k", value = 1 }]
+"#,
+        )
+        .unwrap();
+        let mut app = AppState::load(paths).unwrap();
+        app.set_app("installer/missing", false);
+        app.set_app("installer/present", false);
+
+        assert_eq!(
+            app.set_tweak("t-missing", true).as_deref(),
+            Some("installer/missing")
+        );
+        assert!(app.selection.app_on("installer/missing"));
+
+        assert_eq!(app.set_tweak("t-present", true), None);
+        assert!(
+            !app.selection.app_on("installer/present"),
+            "installed app left alone"
+        );
+
+        assert_eq!(app.set_tweak("t-missing", false), None);
+        assert!(
+            app.selection.app_on("installer/missing"),
+            "turning off leaves the app"
+        );
+    }
+}
+

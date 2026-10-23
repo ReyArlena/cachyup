@@ -542,8 +542,17 @@ impl MainScreen {
             }
             Row::Tweak { id, .. } => {
                 let on = app.selection.tweak_on(id);
-                app.set_tweak(id, !on);
-                vec![Effect::SaveSelection]
+                let mut effects = vec![Effect::SaveSelection];
+                if let Some(key) = app.set_tweak(id, !on) {
+                    let name = app
+                        .catalog
+                        .app(&key)
+                        .map_or(key.clone(), |a| a.display_name().to_string());
+                    effects.push(Effect::Toast(format!(
+                        "also switched on {name} (this tweak needs it)"
+                    )));
+                }
+                effects
             }
             Row::Header(_) | Row::Blank | Row::Desc(_) => Vec::new(),
         }

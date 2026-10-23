@@ -21,6 +21,7 @@ The bash script rewritten as a Rust terminal UI.
 - `~/.config/cachyup/user-apps.toml` for your own apps and tweaks, with duplicate detection.
 - Apps added in a cachyup update start off and are highlighted; apps you uninstall are
   switched off at the next launch, with a popup for each.
+- Turning a tweak on also turns on its app when that app is not installed.
 - Dry run (`d` in the run dialog, or `--dry-run`): every check runs, nothing changes.
 - Run screen with live progress and full output; history screen for past runs.
 - `--run` to run the saved settings without the interface, `--reset` to start over.

@@ -55,7 +55,7 @@ the keys for the current screen. Changes are saved as you make them.
 |------|---------|
 | Full System Update | Each step on or off: rate mirrors, keyrings, `pacman -Syu`, `yay -Sua`, `flatpak update`, and the cleanup steps. Numbers: mirror rating cooldown, package cache versions, yay cache age, runs kept in history. |
 | Install Apps | Every app in the list, grouped by source, with a status column (Installed, Not installed, Unavailable). Tweaks for an app are listed under it. `i` shows the description and package details, `I` shows a description line under every entry (remembered), `/` filters, `a` switches a whole group. |
-| Install Tweaks | The same tweaks as a flat list, with Applied / Not applied (`I` for descriptions). Toggling here and under the app is the same switch. |
+| Install Tweaks | The same tweaks as a flat list, with Applied / Not applied (`I` for descriptions). Toggling here and under the app is the same switch. Turning a tweak on also turns on its app if that app is not installed (a tweak is skipped while its app is missing). |
 
 Ticks are green and switched on; crosses are grey and switched off. Blue entries with a
 `new` badge were added in a cachyup update and start switched off. Names say what an entry
