@@ -19,6 +19,22 @@ pub fn has_cmd(name: &str) -> bool {
         .is_some_and(|path| std::env::split_paths(&path).any(|dir| is_executable(&dir.join(name))))
 }
 
+/// Full path of a command on PATH.
+pub fn which(name: &str) -> Option<std::path::PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .map(|dir| dir.join(name))
+        .find(|p| is_executable(p))
+}
+
+/// The package that owns a command, e.g. `dms` -> `dms-shell`.
+pub fn owning_package(cmd: &str) -> Option<String> {
+    let path = which(cmd)?;
+    capture("pacman", &["-Qqo", &path.to_string_lossy()])
+        .map(|o| o.trim().to_string())
+        .filter(|p| !p.is_empty())
+}
+
 fn is_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     path.metadata()

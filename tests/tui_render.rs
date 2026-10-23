@@ -116,3 +116,23 @@ fn run_modal_and_dry_run_complete() {
     }
     assert!(dir.path().join("state/runs").is_dir());
 }
+
+/// Render the app list against the real system and home directory. Opt in:
+///   XDG_CONFIG_HOME=/tmp/c XDG_STATE_HOME=/tmp/s XDG_CACHE_HOME=/tmp/k \
+///   CACHYUP_DUMP=/tmp/d cargo test --test tui_render -- --ignored
+#[test]
+#[ignore]
+fn dump_app_list_for_this_machine() {
+    let state = AppState::load(cachyup::paths::Paths::from_env()).unwrap();
+    let mut app = App::new(state, true, false);
+    app.key_for_test(key(KeyCode::Down));
+    app.key_for_test(key(KeyCode::Char('c')));
+    app.key_for_test(key(KeyCode::Char('/')));
+    for c in "junction".chars() {
+        app.key_for_test(key(KeyCode::Char(c)));
+    }
+    app.key_for_test(key(KeyCode::Enter));
+    render(&mut app, 120, 20);
+    app.key_for_test(key(KeyCode::Char('i')));
+    render(&mut app, 120, 30);
+}

@@ -1,9 +1,9 @@
 # The built-in app and tweak list. Compiled into the binary.
 #
 # Package lists are plain names, or an inline table when an entry needs more:
-#   { name = "junction", unless_cmd = "dms", unless_note = "using DMS Open" }
-#     unless_cmd   default to off when this command exists
-#     unless_note  shown next to the entry when that happens
+#   { name = "junction", unless_cmd = "dms" }
+#     unless_cmd   default to off when this command exists (the app list says
+#                  which package provides it)
 #     default      true/false, overrides the normal default (on)
 #     description  one line; otherwise it is read from the package source
 #
@@ -69,7 +69,7 @@ pacman = [
     "gvfs-afc",
     "inotify-tools",
     "intellij-idea-oss",
-    { name = "junction", unless_cmd = "dms", unless_note = "using DMS Open" },
+    { name = "junction", unless_cmd = "dms" }, # DMS has its own link chooser
     "lazygit",
     "libinput-tools",
     "libisoburn",
@@ -211,10 +211,9 @@ set = [{ json = "~/.config/discordptb/settings.json", key = "SKIP_HOST_UPDATE", 
 [[tweak]]
 id = "junction-default-browser"
 app = "pacman/junction"
-name = "Default link handler"
+name = "Set as default link handler"
 description = "Make Junction open http/https links, so clicking a link asks which app to use."
 unless_cmd = "dms"
-unless_note = "using DMS Open"
 set = [
     { ini = "~/.config/mimeapps.list", section = "Default Applications", key = "x-scheme-handler/http", value = "re.sol.junction.desktop" },
     { ini = "~/.config/mimeapps.list", section = "Default Applications", key = "x-scheme-handler/https", value = "re.sol.junction.desktop" },

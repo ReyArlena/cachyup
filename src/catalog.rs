@@ -81,7 +81,6 @@ pub struct App {
     pub description: Option<String>,
     /// Off by default when this command exists (e.g. junction when DMS is present).
     pub unless_cmd: Option<String>,
-    pub unless_note: Option<String>,
     /// Explicit default; `None` means on (unless `unless_cmd` applies).
     pub default: Option<bool>,
     /// Only for `Source::Installer`.
@@ -115,7 +114,6 @@ pub struct Tweak {
     pub name: String,
     pub description: Option<String>,
     pub unless_cmd: Option<String>,
-    pub unless_note: Option<String>,
     pub default: Option<bool>,
     pub sets: Vec<SetOp>,
     pub origin: Origin,
@@ -230,7 +228,6 @@ impl Catalog {
                 label: def.label,
                 description: def.description,
                 unless_cmd: def.unless_cmd,
-                unless_note: def.unless_note,
                 default: def.default,
                 installer: Some(Installer {
                     check: def.check,
@@ -340,7 +337,6 @@ struct EntryDef {
     name: String,
     description: Option<String>,
     unless_cmd: Option<String>,
-    unless_note: Option<String>,
     default: Option<bool>,
 }
 
@@ -351,7 +347,6 @@ impl Entry {
                 name,
                 description: None,
                 unless_cmd: None,
-                unless_note: None,
                 default: None,
             },
             Entry::Full(def) => def,
@@ -362,7 +357,6 @@ impl Entry {
             label: None,
             description: def.description,
             unless_cmd: def.unless_cmd,
-            unless_note: def.unless_note,
             default: def.default,
             installer: None,
             origin,
@@ -379,7 +373,6 @@ struct InstallerDef {
     check: String,
     install: String,
     unless_cmd: Option<String>,
-    unless_note: Option<String>,
     default: Option<bool>,
 }
 
@@ -391,7 +384,6 @@ struct TweakDef {
     name: String,
     description: Option<String>,
     unless_cmd: Option<String>,
-    unless_note: Option<String>,
     default: Option<bool>,
     set: Vec<SetDef>,
 }
@@ -442,7 +434,6 @@ impl TweakDef {
             name: self.name,
             description: self.description,
             unless_cmd: self.unless_cmd,
-            unless_note: self.unless_note,
             default: self.default,
             sets,
             origin,

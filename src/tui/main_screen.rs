@@ -13,7 +13,7 @@ use ratatui::widgets::{Paragraph, Wrap};
 use crate::app::AppState;
 use crate::catalog::{App, Origin, Source};
 use crate::config::{NUMBER_SETTINGS, UPDATE_STEPS};
-use crate::engine::edit::tweak_applied;
+use crate::engine::edit::{tweak_applied, tweak_current};
 use crate::system::{InfoMap, has_cmd};
 
 use super::Effect;
@@ -111,6 +111,10 @@ pub struct MainScreen {
     /// Built-in apps and tweaks new since the last launch: blue, with a badge.
     pub new_items: HashSet<String>,
     tweak_status: HashMap<String, bool>,
+    /// For tweaks not in place: what the file holds now.
+    tweak_current: HashMap<String, String>,
+    /// `unless_cmd` -> the package providing it, for commands that exist.
+    conditions: HashMap<String, String>,
     list_height: usize,
 }
 
@@ -131,6 +135,25 @@ impl MainScreen {
                 .cloned()
                 .collect(),
             tweak_status: HashMap::new(),
+            tweak_current: HashMap::new(),
+            conditions: app
+                .catalog
+                .apps
+                .iter()
+                .filter_map(|a| a.unless_cmd.clone())
+                .chain(
+                    app.catalog
+                        .tweaks
+                        .iter()
+                        .filter_map(|t| t.unless_cmd.clone()),
+                )
+                .filter(|cmd| has_cmd(cmd))
+                .map(|cmd| {
+                    let package =
+                        crate::system::owning_package(&cmd).unwrap_or_else(|| cmd.clone());
+                    (cmd, package)
+                })
+                .collect(),
             list_height: 10,
         };
         s.refresh(app);
@@ -144,6 +167,12 @@ impl MainScreen {
             .tweaks
             .iter()
             .map(|t| (t.id.clone(), tweak_applied(t, &app.paths)))
+            .collect();
+        self.tweak_current = app
+            .catalog
+            .tweaks
+            .iter()
+            .filter_map(|t| Some((t.id.clone(), tweak_current(t, &app.paths)?)))
             .collect();
     }
 
@@ -579,12 +608,10 @@ impl MainScreen {
                         Span::raw("user-apps.toml"),
                     ]));
                 }
-                if let (Some(cmd), Some(note)) = (&a.unless_cmd, &a.unless_note)
-                    && has_cmd(cmd)
-                {
+                if let Some(package) = a.unless_cmd.as_ref().and_then(|c| self.conditions.get(c)) {
                     body.push(Line::from(vec![
                         label("Default off"),
-                        Span::raw(format!("{note} ({cmd} found)")),
+                        Span::raw(format!("{package} is installed")),
                     ]));
                 }
                 for (k, v) in i.map(|i| i.details.as_slice()).unwrap_or_default() {
@@ -923,10 +950,11 @@ impl MainScreen {
                 if a.origin == Origin::User {
                     badge.push(Span::styled(" user", theme::dim()));
                 }
-                if let (Some(cmd), Some(note)) = (&a.unless_cmd, &a.unless_note)
-                    && has_cmd(cmd)
-                {
-                    badge.push(Span::styled(format!(" {note}"), theme::dim()));
+                if let Some(package) = a.unless_cmd.as_ref().and_then(|c| self.conditions.get(c)) {
+                    badge.push(Span::styled(
+                        format!(" (default off: {package} installed)"),
+                        theme::dim(),
+                    ));
                 }
                 table_line(
                     m,
@@ -976,10 +1004,11 @@ impl MainScreen {
                 if new {
                     badge.push(Span::styled(" new ", theme::badge_new()));
                 }
-                if let (Some(cmd), Some(note)) = (&t.unless_cmd, &t.unless_note)
-                    && has_cmd(cmd)
-                {
-                    badge.push(Span::styled(format!(" {note}"), theme::dim()));
+                if let Some(current) = self.tweak_current.get(id) {
+                    badge.push(Span::styled(
+                        format!(" (currently {current})"),
+                        theme::dim(),
+                    ));
                 }
                 table_line(
                     m,

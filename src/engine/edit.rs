@@ -145,6 +145,30 @@ pub fn tweak_applied(tweak: &Tweak, paths: &Paths) -> bool {
     tweak.sets.iter().all(|op| op_applied(op, paths))
 }
 
+/// What the file holds now for the first value of a tweak that is not in
+/// place, for "(currently ...)". `.desktop` is dropped from desktop entry
+/// ids, so a link handler reads as `dms-open`. `None` when fully applied.
+pub fn tweak_current(tweak: &Tweak, paths: &Paths) -> Option<String> {
+    let op = tweak.sets.iter().find(|op| !op_applied(op, paths))?;
+    let value = match op {
+        SetOp::Json { file, key, .. } => json_get(&paths.expand(file), key).map(|v| v.to_string()),
+        SetOp::Ini {
+            file, section, key, ..
+        } => ini_get(&paths.expand(file), section, key).map(|v| {
+            v.split(';')
+                .find(|s| !s.is_empty())
+                .unwrap_or_default()
+                .trim_end_matches(".desktop")
+                .to_string()
+        }),
+    };
+    Some(
+        value
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| "unset".into()),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,5 +237,38 @@ mod tests {
             ini_get(&path, "Default Applications", "x-scheme-handler/https").as_deref(),
             Some("a.desktop")
         );
+    }
+
+    #[test]
+    fn current_value_of_an_unapplied_tweak() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::under(dir.path());
+        let tweak = |value: &str| Tweak {
+            id: "t".into(),
+            app: None,
+            name: "t".into(),
+            description: None,
+            unless_cmd: None,
+            default: None,
+            sets: vec![SetOp::Ini {
+                file: "~/mimeapps.list".into(),
+                section: "Default Applications".into(),
+                key: "x-scheme-handler/http".into(),
+                value: value.into(),
+            }],
+            origin: crate::catalog::Origin::Builtin,
+        };
+        let t = tweak("re.sol.junction.desktop");
+        assert_eq!(tweak_current(&t, &paths).as_deref(), Some("unset"));
+        let file = paths.expand("~/mimeapps.list");
+        ini_set(
+            &file,
+            "Default Applications",
+            "x-scheme-handler/http",
+            "dms-open.desktop;",
+        )
+        .unwrap();
+        assert_eq!(tweak_current(&t, &paths).as_deref(), Some("dms-open"));
+        assert_eq!(tweak_current(&tweak("dms-open.desktop;"), &paths), None);
     }
 }
