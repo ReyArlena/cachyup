@@ -714,7 +714,7 @@ fn touched_within(dir: &Path, max_age: Duration) -> bool {
 
 pub fn post_checks(s: &mut Vec<Step>) {
     let g = GROUP_CHECKS;
-    s.push(Step::new(g, ".pacnew files", |cx| {
+    s.push(Step::new(g, ".pacnew check", |cx| {
         if !has_cmd("pacdiff") {
             return Outcome::attention("pacdiff not installed");
         }
@@ -737,7 +737,7 @@ pub fn post_checks(s: &mut Vec<Step>) {
             files.len()
         ))
     }));
-    s.push(Step::new(g, "Reboot not required", |cx| {
+    s.push(Step::new(g, "Reboot check", |cx| {
         // The running kernel's modules dir goes when its package is upgraded.
         // kernel-modules-hook keeps it, so then this cannot tell.
         if cx
@@ -753,7 +753,7 @@ pub fn post_checks(s: &mut Vec<Step>) {
             Outcome::attention("kernel was updated, reboot when convenient")
         }
     }));
-    s.push(Step::new(g, "No services need a restart", |cx| {
+    s.push(Step::new(g, "Service restart check", |cx| {
         if !has_cmd("checkservices") {
             return Outcome::attention("checkservices not installed");
         }
@@ -769,30 +769,27 @@ pub fn post_checks(s: &mut Vec<Step>) {
             Outcome::pass()
         } else {
             Outcome::attention(format!(
-                "restart with: sudo systemctl restart {}",
+                "{} to restart, run: sudo systemctl restart {}",
+                services.len(),
                 services.join(" ")
             ))
         }
     }));
-    s.push(Step::new(
-        g,
-        "AUR packages up to date with libraries",
-        |cx| {
-            let Some(handle) = cx.rebuild.take() else {
-                return if has_cmd("checkrebuild") {
-                    // Not started (update steps off): run it now.
-                    rebuild_outcome(cx, capture_any("checkrebuild", &[]))
-                } else {
-                    Outcome::attention("checkrebuild not installed")
-                };
+    s.push(Step::new(g, "AUR rebuild check", |cx| {
+        let Some(handle) = cx.rebuild.take() else {
+            return if has_cmd("checkrebuild") {
+                // Not started (update steps off): run it now.
+                rebuild_outcome(cx, capture_any("checkrebuild", &[]))
+            } else {
+                Outcome::attention("checkrebuild not installed")
             };
-            if !handle.is_finished() {
-                cx.note("waiting for checkrebuild to finish");
-            }
-            let out = handle.join().ok().flatten();
-            rebuild_outcome(cx, out)
-        },
-    ));
+        };
+        if !handle.is_finished() {
+            cx.note("waiting for checkrebuild to finish");
+        }
+        let out = handle.join().ok().flatten();
+        rebuild_outcome(cx, out)
+    }));
 }
 
 fn restart_services(out: &str) -> Vec<String> {
@@ -828,7 +825,8 @@ fn rebuild_outcome(cx: &mut Ctx, out: Option<String>) -> Outcome {
         Outcome::pass()
     } else {
         Outcome::attention(format!(
-            "rebuild with: yay -S --rebuild {}",
+            "{} to rebuild, run: yay -S --rebuild {}",
+            rebuild.len(),
             rebuild.join(" ")
         ))
     }
