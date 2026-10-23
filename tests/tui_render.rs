@@ -168,6 +168,10 @@ fn descriptions_show_under_each_entry() {
         col(below, "Stop Discord"),
         "{text}"
     );
+    // Remembered for the next launch.
+    let saved = std::fs::read_to_string(_dir.path().join("config/config.toml")).unwrap();
+    assert!(saved.contains("show_descriptions = true"), "{saved}");
+
     // Toggling back hides them.
     app.key_for_test(key(KeyCode::Char('I')));
     assert!(!render(&mut app, 120, 30).contains("Stop Discord"));

@@ -108,6 +108,8 @@ pub struct Settings {
     pub runs_to_keep: u32,
     /// Check GitHub for a newer release at launch.
     pub update_check: bool,
+    /// A description line under every app and tweak (`I` in the app).
+    pub show_descriptions: bool,
 }
 
 impl Default for Tasks {
@@ -128,6 +130,7 @@ impl Default for Settings {
             yay_cache_keep_days: 30,
             runs_to_keep: 30,
             update_check: true,
+            show_descriptions: false,
         }
     }
 }

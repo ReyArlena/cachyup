@@ -131,7 +131,7 @@ impl MainScreen {
             offset: [0; 3],
             filter: TextInput::default(),
             filtering: false,
-            show_desc: false,
+            show_desc: app.config.settings.show_descriptions,
             new_items: app
                 .launch
                 .new_apps
@@ -303,7 +303,7 @@ impl MainScreen {
     }
 
     /// `I`: show or hide the description lines, keeping the cursor on its row.
-    fn toggle_descriptions(&mut self, app: &AppState) {
+    fn toggle_descriptions(&mut self, app: &mut AppState) -> Vec<Effect> {
         let rows = self.rows(app);
         let current = rows.get(self.cursor[self.task]).cloned();
         self.show_desc = !self.show_desc;
@@ -312,6 +312,8 @@ impl MainScreen {
             self.cursor[self.task] = i;
         }
         self.snap_cursor(app);
+        app.config.settings.show_descriptions = self.show_desc;
+        vec![Effect::SaveConfig]
     }
 
     pub fn handle(
@@ -462,7 +464,7 @@ impl MainScreen {
                 }
             }
             Action::Char('I') if self.current() != Task::Update => {
-                self.toggle_descriptions(app);
+                return self.toggle_descriptions(app);
             }
             Action::Char('/') if self.current() != Task::Update => {
                 self.filtering = true;
