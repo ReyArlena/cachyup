@@ -118,7 +118,6 @@ fn run_modal_and_dry_run_complete() {
 }
 
 /// Render the app list against the real system and home directory. Opt in:
-///   XDG_CONFIG_HOME=/tmp/c XDG_STATE_HOME=/tmp/s XDG_CACHE_HOME=/tmp/k \
 ///   CACHYUP_DUMP=/tmp/d cargo test --test tui_render -- --ignored
 #[test]
 #[ignore]
@@ -128,11 +127,48 @@ fn dump_app_list_for_this_machine() {
     app.key_for_test(key(KeyCode::Down));
     app.key_for_test(key(KeyCode::Char('c')));
     app.key_for_test(key(KeyCode::Char('/')));
-    for c in "junction".chars() {
+    for c in "d".chars() {
         app.key_for_test(key(KeyCode::Char(c)));
     }
     app.key_for_test(key(KeyCode::Enter));
-    render(&mut app, 120, 20);
+    app.key_for_test(key(KeyCode::Char('I')));
+    render(&mut app, 120, 30);
     app.key_for_test(key(KeyCode::Char('i')));
     render(&mut app, 120, 30);
+}
+
+#[test]
+fn descriptions_show_under_each_entry() {
+    let (_dir, state) = sandbox();
+    let mut app = App::new(state, false, false);
+    app.key_for_test(key(KeyCode::Down));
+    app.key_for_test(key(KeyCode::Char('c')));
+    app.key_for_test(key(KeyCode::Char('/')));
+    for c in "discord".chars() {
+        app.key_for_test(key(KeyCode::Char(c)));
+    }
+    app.key_for_test(key(KeyCode::Enter));
+    app.key_for_test(key(KeyCode::Char('I')));
+    let text = render(&mut app, 120, 30);
+    // The tweak description starts in line with the tweak name above it.
+    let lines: Vec<&str> = text.lines().collect();
+    let name = lines
+        .iter()
+        .position(|l| l.contains("Disable host update"))
+        .unwrap();
+    let below = lines[name + 1];
+    let col = |l: &str, s: &str| {
+        l.chars()
+            .collect::<String>()
+            .find(s)
+            .map(|b| l[..b].chars().count())
+    };
+    assert_eq!(
+        col(lines[name], "Disable host update"),
+        col(below, "Stop Discord"),
+        "{text}"
+    );
+    // Toggling back hides them.
+    app.key_for_test(key(KeyCode::Char('I')));
+    assert!(!render(&mut app, 120, 30).contains("Stop Discord"));
 }

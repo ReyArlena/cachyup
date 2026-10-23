@@ -92,11 +92,13 @@ enum Row {
         nested: bool,
     },
     Blank,
+    /// The description line under an app or tweak (`I`).
+    Desc(Box<Row>),
 }
 
 impl Row {
     fn selectable(&self) -> bool {
-        !matches!(self, Row::Header(_) | Row::Blank)
+        !matches!(self, Row::Header(_) | Row::Blank | Row::Desc(_))
     }
 }
 
@@ -108,6 +110,8 @@ pub struct MainScreen {
     offset: [usize; 3],
     filter: TextInput,
     filtering: bool,
+    /// Show a description line under every app and tweak.
+    show_desc: bool,
     /// Built-in apps and tweaks new since the last launch: blue, with a badge.
     pub new_items: HashSet<String>,
     tweak_status: HashMap<String, bool>,
@@ -127,6 +131,7 @@ impl MainScreen {
             offset: [0; 3],
             filter: TextInput::default(),
             filtering: false,
+            show_desc: false,
             new_items: app
                 .launch
                 .new_apps
@@ -253,34 +258,60 @@ impl MainScreen {
                     )));
                     for a in apps {
                         let key = a.key();
-                        rows.push(Row::App(key.clone()));
+                        self.push_row(&mut rows, Row::App(key.clone()));
                         for t in app.catalog.tweaks_for(&key) {
-                            rows.push(Row::Tweak {
-                                id: t.id.clone(),
-                                nested: true,
-                            });
+                            self.push_row(
+                                &mut rows,
+                                Row::Tweak {
+                                    id: t.id.clone(),
+                                    nested: true,
+                                },
+                            );
                         }
                     }
                 }
                 rows
             }
-            Task::Tweaks => app
-                .catalog
-                .tweaks
-                .iter()
-                .filter(|t| {
+            Task::Tweaks => {
+                let mut rows = Vec::new();
+                for t in app.catalog.tweaks.iter().filter(|t| {
                     matches(&t.name)
                         || t.app
                             .as_deref()
                             .and_then(|k| app.catalog.app(k))
                             .is_some_and(|a| matches(a.display_name()))
-                })
-                .map(|t| Row::Tweak {
-                    id: t.id.clone(),
-                    nested: false,
-                })
-                .collect(),
+                }) {
+                    self.push_row(
+                        &mut rows,
+                        Row::Tweak {
+                            id: t.id.clone(),
+                            nested: false,
+                        },
+                    );
+                }
+                rows
+            }
         }
+    }
+
+    /// Add an app or tweak row, with its description line when those are shown.
+    fn push_row(&self, rows: &mut Vec<Row>, row: Row) {
+        rows.push(row.clone());
+        if self.show_desc {
+            rows.push(Row::Desc(Box::new(row)));
+        }
+    }
+
+    /// `I`: show or hide the description lines, keeping the cursor on its row.
+    fn toggle_descriptions(&mut self, app: &AppState) {
+        let rows = self.rows(app);
+        let current = rows.get(self.cursor[self.task]).cloned();
+        self.show_desc = !self.show_desc;
+        let rows = self.rows(app);
+        if let Some(i) = current.and_then(|c| rows.iter().position(|r| *r == c)) {
+            self.cursor[self.task] = i;
+        }
+        self.snap_cursor(app);
     }
 
     pub fn handle(
@@ -430,6 +461,9 @@ impl MainScreen {
                     self.focus = PANE_TASKS;
                 }
             }
+            Action::Char('I') if self.current() != Task::Update => {
+                self.toggle_descriptions(app);
+            }
             Action::Char('/') if self.current() != Task::Update => {
                 self.filtering = true;
             }
@@ -509,7 +543,7 @@ impl MainScreen {
                 app.set_tweak(id, !on);
                 vec![Effect::SaveSelection]
             }
-            Row::Header(_) | Row::Blank => Vec::new(),
+            Row::Header(_) | Row::Blank | Row::Desc(_) => Vec::new(),
         }
     }
 
@@ -726,8 +760,15 @@ impl MainScreen {
             hints.push(("Space", "toggle"));
             match self.current() {
                 Task::Update => hints.push(("i", "info")),
-                Task::Apps => hints.extend([("i", "info"), ("a", "all in group"), ("/", "filter")]),
-                Task::Tweaks => hints.extend([("i", "info"), ("/", "filter")]),
+                Task::Apps => hints.extend([
+                    ("i", "info"),
+                    ("I", "descriptions"),
+                    ("a", "all in group"),
+                    ("/", "filter"),
+                ]),
+                Task::Tweaks => {
+                    hints.extend([("i", "info"), ("I", "descriptions"), ("/", "filter")])
+                }
             }
             hints.push(("Esc", "back"));
         }
@@ -847,12 +888,18 @@ impl MainScreen {
                 });
             }
             let y = list_area.y + (i - self.offset[t]) as u16;
-            if row.selectable() {
+            // A description line clicks as the row above it.
+            let target = match row {
+                Row::Desc(_) => Some(i.saturating_sub(1)),
+                r if r.selectable() => Some(i),
+                _ => None,
+            };
+            if let Some(index) = target {
                 hits.add(
                     Rect::new(list_area.x, y, list_area.width, 1),
                     Hit::Row {
                         pane: PANE_OPTIONS,
-                        index: i,
+                        index,
                     },
                 );
             }
@@ -902,6 +949,30 @@ impl MainScreen {
         match row {
             Row::Header(text) => Line::from(Span::styled(format!(" {text}"), theme::heading())),
             Row::Blank => Line::from(""),
+            Row::Desc(of) => {
+                // Starts in the same column as the name above it.
+                let indent = match of.as_ref() {
+                    Row::Tweak { nested: true, .. } => 7,
+                    _ => 3,
+                };
+                let text = describe(of, app, info).unwrap_or_else(|| {
+                    if info.is_empty() {
+                        "reading package info...".into()
+                    } else {
+                        "no description".into()
+                    }
+                });
+                let room = width.saturating_sub(indent + 1).max(1);
+                let mut shown: String = text.chars().take(room).collect();
+                if text.chars().count() > room {
+                    shown.pop();
+                    shown.push('…');
+                }
+                Line::from(vec![
+                    Span::raw(" ".repeat(indent)),
+                    Span::styled(shown, theme::dim()),
+                ])
+            }
             Row::Step(i) => {
                 let step = &UPDATE_STEPS[*i];
                 let enabled = step.needs.is_none_or(|n| app.config.step_enabled(n));
@@ -1029,18 +1100,11 @@ impl MainScreen {
             Row::Step(i) => UPDATE_STEPS[*i].help.to_string(),
             Row::Number(i) => format!("{} (Enter to change)", NUMBER_SETTINGS[*i].help),
             Row::Fixed(_, help) => help.to_string(),
-            Row::App(key) => {
-                let desc = app
-                    .catalog
-                    .app(key)
-                    .and_then(|a| a.description.clone())
-                    .or_else(|| info.get(key).and_then(|i| i.description.clone()));
-                match desc {
-                    Some(d) => format!("{d}  (i for details)"),
-                    None if info.is_empty() => "Reading package info...".into(),
-                    None => "No description  (i for details)".into(),
-                }
-            }
+            Row::App(_) => match describe(row, app, info) {
+                Some(d) => format!("{d}  (i for details)"),
+                None if info.is_empty() => "Reading package info...".into(),
+                None => "No description  (i for details)".into(),
+            },
             Row::Tweak { id, .. } => app
                 .catalog
                 .tweak(id)
@@ -1048,6 +1112,20 @@ impl MainScreen {
                 .unwrap_or_default(),
             _ => String::new(),
         }
+    }
+}
+
+/// The description of an app (catalog text first, then the package source)
+/// or a tweak.
+fn describe(row: &Row, app: &AppState, info: &InfoMap) -> Option<String> {
+    match row {
+        Row::App(key) => app
+            .catalog
+            .app(key)
+            .and_then(|a| a.description.clone())
+            .or_else(|| info.get(key).and_then(|i| i.description.clone())),
+        Row::Tweak { id, .. } => app.catalog.tweak(id).and_then(|t| t.description.clone()),
+        _ => None,
     }
 }
 

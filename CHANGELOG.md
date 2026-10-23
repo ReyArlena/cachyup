@@ -16,7 +16,7 @@ The bash script rewritten as a Rust terminal UI.
   options on the right. Every update and cleanup step can be switched on or off.
 - One combined app list (`catalog.toml`) for pacman, AUR, flatpak and install scripts, with
   each app's tweaks listed under it, a status column, package descriptions read from the
-  sources, and an info popup.
+  sources, an info popup (`i`), and a description line under every entry (`I`).
 - `~/.config/cachyup/user-apps.toml` for your own apps and tweaks, with duplicate detection.
 - Apps added in a cachyup update start off and are highlighted; apps you uninstall are
   switched off at the next launch, with a popup for each.
