@@ -42,7 +42,7 @@ pub fn capture(program: &str, args: &[&str]) -> Option<String> {
 
 /// Like `capture`, but returns stdout whatever the exit status
 /// (`pacman -Si a b` exits 1 if any one name is missing).
-fn capture_any(program: &str, args: &[&str]) -> Option<String> {
+pub fn capture_any(program: &str, args: &[&str]) -> Option<String> {
     let out = Command::new(program)
         .args(args)
         .env("LC_ALL", "C")
