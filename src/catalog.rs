@@ -38,6 +38,16 @@ impl Source {
         }
     }
 
+    /// Where it comes from, for the info popup.
+    pub fn label(self) -> &'static str {
+        match self {
+            Source::Pacman => "Repo (pacman)",
+            Source::Aur => "AUR (yay)",
+            Source::Flatpak => "Flathub (flatpak)",
+            Source::Installer => "Install script",
+        }
+    }
+
     /// Heading used in the app list and the run.
     pub fn heading(self) -> &'static str {
         match self {

@@ -10,7 +10,7 @@ use crate::catalog::{App, SetOp, Source, Tweak};
 use crate::config::Config;
 use crate::system::{capture_any, has_cmd, installer_present};
 
-use super::edit::{ini_get, ini_set, json_get, json_set};
+use super::edit::{ini_set, json_set, op_applied};
 use super::plan::{
     GROUP_CHECKS, GROUP_CLEANUP, GROUP_PREFLIGHT, GROUP_PREREQ, GROUP_TWEAKS, GROUP_UPDATE, Step,
 };
@@ -460,20 +460,6 @@ fn apply_op(op: &SetOp, paths: &crate::paths::Paths) -> anyhow::Result<()> {
             key,
             value,
         } => ini_set(&paths.expand(file), section, key, value),
-    }
-}
-
-pub fn op_applied(op: &SetOp, paths: &crate::paths::Paths) -> bool {
-    match op {
-        SetOp::Json { file, key, value } => {
-            json_get(&paths.expand(file), key).as_ref() == Some(value)
-        }
-        SetOp::Ini {
-            file,
-            section,
-            key,
-            value,
-        } => ini_get(&paths.expand(file), section, key).as_deref() == Some(value.as_str()),
     }
 }
 

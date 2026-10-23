@@ -6,7 +6,8 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
-use crate::paths::write_file;
+use crate::catalog::{SetOp, Tweak};
+use crate::paths::{Paths, write_file};
 
 /// The value at a dotted key, or `None` when the file, key or JSON is missing.
 pub fn json_get(path: &Path, key: &str) -> Option<Value> {
@@ -122,6 +123,26 @@ pub fn ini_set(path: &Path, section: &str, key: &str, value: &str) -> Result<()>
     let mut result = out.join("\n");
     result.push('\n');
     write_file(path, &result).with_context(|| format!("writing {}", path.display()))
+}
+
+/// Whether one value of a tweak is already in place.
+pub fn op_applied(op: &SetOp, paths: &Paths) -> bool {
+    match op {
+        SetOp::Json { file, key, value } => {
+            json_get(&paths.expand(file), key).as_ref() == Some(value)
+        }
+        SetOp::Ini {
+            file,
+            section,
+            key,
+            value,
+        } => ini_get(&paths.expand(file), section, key).as_deref() == Some(value.as_str()),
+    }
+}
+
+/// Whether every value of a tweak is in place.
+pub fn tweak_applied(tweak: &Tweak, paths: &Paths) -> bool {
+    tweak.sets.iter().all(|op| op_applied(op, paths))
 }
 
 #[cfg(test)]
