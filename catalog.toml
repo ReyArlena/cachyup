@@ -1,0 +1,221 @@
+# The built-in app and tweak list. Compiled into the binary.
+#
+# Package lists are plain names, or an inline table when an entry needs more:
+#   { name = "junction", unless_cmd = "dms", unless_note = "using DMS Open" }
+#     unless_cmd   default to off when this command exists
+#     unless_note  shown next to the entry when that happens
+#     default      true/false, overrides the normal default (on)
+#     description  one line; otherwise it is read from the package source
+#
+# Users add their own in ~/.config/cachyup/user-apps.toml, same layout.
+
+# Installed before everything else whenever a run does anything. Needed by
+# cachyup itself, never shown in the app list.
+prerequisites = [
+    "archlinux-contrib", # checkservices (services needing a restart)
+    "base-devel",        # makepkg, for AUR builds
+    "git",
+    "pacman-contrib",    # paccache, pacdiff (cleanup and .pacnew check)
+    "rebuild-detector",  # checkrebuild (AUR packages needing a rebuild)
+    "yay",               # AUR helper (cachyos repo)
+]
+
+# Official and CachyOS repo packages.
+pacman = [
+    "adw-gtk-theme",
+    "ark",
+    "bazaar",
+    "btrfs-assistant",
+    "btrfs-progs",
+    "cachy-update",
+    "cachyos-gaming-applications",
+    "cachyos-gaming-meta",
+    "cameractrls",
+    "chromium",
+    "clamav",
+    "claude-desktop",
+    "cloudflared",
+    "cmake",
+    "decoder",
+    "delve",
+    "discord",
+    "docker",
+    "docker-buildx",
+    "docker-compose",
+    "dolphin",
+    "dux-gop",
+    "emacs",
+    "evolution",
+    "evolution-ews",
+    "evtest",
+    "eyedropper",
+    "filelight",
+    "filezilla",
+    "fio",
+    "flatpak",
+    "flite",
+    "font-manager",
+    "fuse2",
+    "ghostty",
+    "ghostwriter",
+    "git-filter-repo",
+    "github-cli",
+    "gnome-keyring",
+    "go",
+    "godot",
+    "gopls",
+    "gpu-screen-recorder",
+    "gradia",
+    "gvfs-afc",
+    "inotify-tools",
+    "intellij-idea-oss",
+    { name = "junction", unless_cmd = "dms", unless_note = "using DMS Open" },
+    "lazygit",
+    "libinput-tools",
+    "libisoburn",
+    "libreoffice-fresh",
+    "localsend",
+    "loupe",
+    "mediainfo-gui",
+    "musescore",
+    "nautilus",
+    "ninja",
+    "nvme-cli",
+    "nvtop",
+    "obs-studio-browser",
+    "obsidian",
+    "occt",
+    "onlyoffice-bin",
+    "opencode",
+    "openrct2",
+    "openrgb",
+    "pandoc-cli",
+    "parsec-bin",
+    "partitionmanager",
+    "paru",
+    "playerctl",
+    "plezy",
+    "podman",
+    "prismlauncher",
+    "protonup-qt",
+    "rclone",
+    "rustup",
+    "seahorse",
+    "shellcheck",
+    "slurp",
+    "squashfs-tools",
+    "stow",
+    "stress-ng",
+    "sunshine",
+    "sushi",
+    "switcheroo",
+    "tailscale",
+    "telegram-desktop",
+    "textpieces",
+    "ttf-nerd-fonts-symbols-mono",
+    "uwsm",
+    "waterfox-bin",
+    "wl-clipboard",
+    "wofi",
+    "wtype",
+    "xclip",
+    "xdg-desktop-portal-gnome",
+    "xdg-desktop-portal-hyprland",
+    "yt-dlp",
+    "zed",
+    "zen-browser-bin",
+]
+
+# AUR packages, installed with yay.
+aur = [
+    "amethyst-mod-manager",
+    "dankcalendar-bin",
+    "discord-ptb",
+    "dsearch-bin",
+    "figma-linux-next-bin",
+    "google-chrome",
+    "herdr-bin",
+    "hyprland-preview-share-picker-git",
+    "openttd-jgrpp",
+    "phpstorm",
+    "phpstorm-jre",
+    "rustrover",
+    "rustrover-jre",
+    "spotify",
+    "ttf-symbola",
+    "upnote-appimage",
+    "uxplay",
+    "visual-studio-code-bin",
+]
+
+# Flathub application IDs, installed system-wide.
+flatpak = [
+    "com.rafaelmardojai.SharePreview",
+    "com.rtosta.zapzap",
+    "com.rustdesk.RustDesk",
+    "dev.deedles.Trayscale",
+    "io.github.ebonjaeger.bluejay",
+    "io.github.hkdb.Aerion",
+    "io.github.totoshko88.RustConn",
+    "it.fabiodistasio.AntaresSQL",
+    "org.gnome.Calendar",
+    "org.gnome.gitlab.cheywood.Buffer",
+    "org.gnome.Showtime",
+    "org.inkscape.Inkscape",
+    "org.kde.ktouch",
+    "org.kde.optiimage",
+]
+
+# Apps with their own install script, run as your user with bash.
+#   check    a command on PATH or a path (~ allowed); present = installed
+#   install  shell command run with `bash -c`
+[[installer]]
+name = "claude"
+label = "Claude Code"
+description = "Anthropic's coding agent for the terminal (native installer, ~/.local/bin/claude)"
+check = "~/.local/bin/claude"
+install = "curl -fsSL https://claude.ai/install.sh | bash"
+
+[[installer]]
+name = "kiln"
+description = "Hardware burn-in and diagnostics runner (~/.local/bin/kiln)"
+check = "~/.local/bin/kiln"
+install = "curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sh"
+
+[[installer]]
+name = "spotify-url-helper"
+label = "Spotify Helper"
+description = "Own installer: ~/.local/bin/spotify-url-helper and a .desktop file"
+check = "~/.local/bin/spotify-url-helper"
+install = "curl -fsSL https://raw.githubusercontent.com/ReyArlena/spotify-url-helper/main/install.sh | sh"
+
+# Config tweaks. `app` ties a tweak to an app (shown under it in the app list,
+# skipped while that app is not installed). Each `set` entry writes one value:
+#   { json = FILE, key = "a.b", value = ... }                  JSON key (dotted path)
+#   { ini = FILE, section = "S", key = "k", value = "v" }      ini-style key
+# Files are written through symlinks, so stow-managed dotfiles stay links.
+[[tweak]]
+id = "discord-skip-host-update"
+app = "pacman/discord"
+name = "Disable host update"
+description = "Stop Discord blocking launch until it self-updates; pacman owns updates."
+set = [{ json = "~/.config/discord/settings.json", key = "SKIP_HOST_UPDATE", value = true }]
+
+[[tweak]]
+id = "discordptb-skip-host-update"
+app = "aur/discord-ptb"
+name = "Disable host update"
+description = "Stop Discord PTB blocking launch until it self-updates; yay owns updates."
+set = [{ json = "~/.config/discordptb/settings.json", key = "SKIP_HOST_UPDATE", value = true }]
+
+[[tweak]]
+id = "junction-default-browser"
+app = "pacman/junction"
+name = "Default link handler"
+description = "Make Junction open http/https links, so clicking a link asks which app to use."
+unless_cmd = "dms"
+unless_note = "using DMS Open"
+set = [
+    { ini = "~/.config/mimeapps.list", section = "Default Applications", key = "x-scheme-handler/http", value = "re.sol.junction.desktop" },
+    { ini = "~/.config/mimeapps.list", section = "Default Applications", key = "x-scheme-handler/https", value = "re.sol.junction.desktop" },
+]
