@@ -176,3 +176,88 @@ fn descriptions_show_under_each_entry() {
     app.key_for_test(key(KeyCode::Char('I')));
     assert!(!render(&mut app, 120, 30).contains("Stop Discord"));
 }
+
+#[test]
+fn dotfiles_asks_for_the_folder_then_lists_packages() {
+    let (dir, state) = sandbox();
+    // A stow folder in the sandbox home: one package linked, one not.
+    let home = dir.path().join("home");
+    let dots = home.join("dots");
+    for f in [
+        "fish/.config/fish/config.fish",
+        "niri/.config/niri/config.kdl",
+    ] {
+        let p = dots.join(f);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, "").unwrap();
+    }
+    std::fs::create_dir_all(home.join(".config")).unwrap();
+    std::os::unix::fs::symlink("../dots/fish/.config/fish", home.join(".config/fish")).unwrap();
+
+    let mut app = App::new(state, false, false);
+    // Stow is checked before anything else, and blocks the screen.
+    app.set_stow_check_for_test(|| false);
+    app.key_for_test(key(KeyCode::Char('D')));
+    let text = render(&mut app, 120, 36);
+    assert!(text.contains("GNU Stow is not installed"), "{text}");
+    assert!(text.contains("back to main menu"), "{text}");
+    assert!(!text.contains("Dotfiles folder"), "{text}");
+    app.key_for_test(key(KeyCode::Esc));
+    assert_eq!(app.screen_name_for_test(), "main");
+    assert!(!render(&mut app, 120, 36).contains("GNU Stow"));
+
+    app.set_stow_check_for_test(|| true);
+    app.key_for_test(key(KeyCode::Char('D')));
+    let text = render(&mut app, 120, 36);
+    assert!(text.contains("Dotfiles folder"), "{text}");
+    assert!(text.contains("~/dotfiles"), "{text}");
+
+    // The default does not exist in the sandbox: asked again.
+    app.key_for_test(key(KeyCode::Enter));
+    let text = render(&mut app, 120, 36);
+    assert!(text.contains("Not a folder: ~/dotfiles"), "{text}");
+    assert_eq!(app.screen_name_for_test(), "main");
+
+    for _ in 0.."~/dotfiles".len() {
+        app.key_for_test(key(KeyCode::Backspace));
+    }
+    for c in "~/dots".chars() {
+        app.key_for_test(key(KeyCode::Char(c)));
+    }
+    app.key_for_test(key(KeyCode::Enter));
+    assert_eq!(app.screen_name_for_test(), "dotfiles");
+    app.wait_dotfiles_for_test();
+    let text = render(&mut app, 120, 36);
+    assert!(text.contains("Dotfiles ~/dots"), "{text}");
+    assert!(text.contains("Linked (1)"), "{text}");
+    assert!(text.contains("folder link"), "{text}");
+    assert!(text.contains("not linked"), "{text}");
+    assert!(text.contains("~/.config/fish"), "{text}");
+    for (w, h) in [(60, 15), (2, 2)] {
+        render(&mut app, w, h);
+    }
+
+    // Remembered, and Esc goes back.
+    let saved = std::fs::read_to_string(dir.path().join("config/config.toml")).unwrap();
+    assert!(saved.contains("dir = \"~/dots\""), "{saved}");
+    app.key_for_test(key(KeyCode::Esc));
+    assert_eq!(app.screen_name_for_test(), "main");
+    app.key_for_test(key(KeyCode::Char('D')));
+    assert_eq!(app.screen_name_for_test(), "dotfiles");
+}
+
+/// The Dotfiles screen against this machine's real stow folder. Opt in:
+///   CACHYUP_DUMP=/tmp/d cargo test --test tui_render -- --ignored dotfiles
+#[test]
+#[ignore]
+fn dump_dotfiles_for_this_machine() {
+    let state = AppState::load(cachyup::paths::Paths::from_env()).unwrap();
+    let mut app = App::new(state, true, false);
+    app.key_for_test(key(KeyCode::Char('D')));
+    app.wait_dotfiles_for_test();
+    render(&mut app, 140, 40);
+    for _ in 0..30 {
+        app.key_for_test(key(KeyCode::Down));
+        render(&mut app, 140, 40);
+    }
+}

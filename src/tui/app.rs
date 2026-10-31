@@ -17,6 +17,7 @@ use crate::engine::{Event, RunHandle, Status, start_run};
 use crate::system::{InfoMap, fetch_info, load_info_cache, save_info_cache};
 
 use super::Effect;
+use super::dotfiles::{DotfilesScreen, Source};
 use super::history::HistoryScreen;
 use super::input::{Action, Hit, HitMap, map_event};
 use super::main_screen::MainScreen;
@@ -39,6 +40,7 @@ enum Screen {
     Main,
     Run,
     History,
+    Dotfiles,
 }
 
 pub struct App {
@@ -49,6 +51,7 @@ pub struct App {
     main: MainScreen,
     run_screen: RunScreen,
     history: HistoryScreen,
+    dotfiles: DotfilesScreen,
     modal: Option<Modal>,
     startup: VecDeque<Modal>,
     help: bool,
@@ -67,6 +70,8 @@ pub struct App {
     /// Whether the terminal currently sends mouse events to us. Off while a
     /// popup is open, so its text can be selected and copied normally.
     mouse_on: bool,
+    /// Whether GNU Stow is installed, asked each time Dotfiles opens.
+    stow_check: fn() -> bool,
 }
 
 impl App {
@@ -103,6 +108,7 @@ impl App {
             main,
             run_screen: RunScreen::empty(),
             history: HistoryScreen::new(),
+            dotfiles: DotfilesScreen::new(),
             modal: startup.pop_front(),
             startup,
             help: false,
@@ -117,6 +123,7 @@ impl App {
             pending_run: false,
             exit: None,
             mouse_on: true,
+            stow_check: || crate::system::has_cmd("stow"),
             state,
         }
     }
@@ -172,6 +179,7 @@ impl App {
     }
 
     fn poll_background(&mut self) {
+        self.dotfiles.poll();
         // Runner events: drain plenty per frame so output keeps up.
         let mut finished = None;
         if let Some(run) = &self.run {
@@ -308,6 +316,13 @@ impl App {
                     self.history.handle(action, &self.hits)
                 }
             }
+            Screen::Dotfiles => {
+                if action == Action::Quit {
+                    vec![Effect::Quit]
+                } else {
+                    self.dotfiles.handle(action, &self.hits)
+                }
+            }
         };
         self.apply(effects);
     }
@@ -337,6 +352,7 @@ impl App {
                 let effects = self.history.delete_current(&self.state.paths.runs_dir());
                 self.apply(effects);
             }
+            "dotfiles-dir" => self.set_dotfiles_dir(&value.unwrap_or_default()),
             tag if tag.starts_with("number:") => {
                 let index = tag["number:".len()..].parse().unwrap_or(0);
                 let effects =
@@ -399,9 +415,51 @@ impl App {
                     self.screen = Screen::History;
                 }
                 Effect::CloseHistory => self.screen = self.history_from,
+                // Stow first: without it the screen has nothing to offer.
+                Effect::Dotfiles if !(self.stow_check)() => self.modal = Some(no_stow_modal()),
+                Effect::Dotfiles => match self.state.config.dotfiles.dir.clone() {
+                    Some(dir) => self.open_dotfiles(&dir),
+                    None => self.modal = Some(dotfiles_dir_modal(DEFAULT_DOTFILES, None)),
+                },
+                Effect::CloseDotfiles => self.screen = Screen::Main,
+                Effect::AskDotfilesDir => {
+                    let current = self.state.config.dotfiles.dir.as_deref();
+                    self.modal = Some(dotfiles_dir_modal(
+                        current.unwrap_or(DEFAULT_DOTFILES),
+                        None,
+                    ));
+                }
                 Effect::Quit => self.exit = Some(Exit::Quit),
             }
         }
+    }
+
+    /// The folder typed into the dotfiles popup: save it if it is a folder,
+    /// otherwise ask again.
+    fn set_dotfiles_dir(&mut self, typed: &str) {
+        let typed = typed.trim().trim_end_matches('/');
+        let typed = if typed.is_empty() { "~" } else { typed };
+        let dir = self.state.paths.expand(typed);
+        if !dir.is_dir() {
+            let why = format!("Not a folder: {}", self.state.paths.tilde(&dir));
+            self.modal = Some(dotfiles_dir_modal(typed, Some(&why)));
+            return;
+        }
+        let shown = self.state.paths.tilde(&dir);
+        self.state.config.dotfiles.dir = Some(shown.clone());
+        self.apply(vec![Effect::SaveConfig]);
+        self.open_dotfiles(&shown);
+    }
+
+    fn open_dotfiles(&mut self, dir: &str) {
+        let source = Source {
+            dir: self.state.paths.expand(dir),
+            home: self.state.paths.home.clone(),
+            ignore: self.state.config.dotfiles.ignore.clone(),
+            shown: dir.to_string(),
+        };
+        self.dotfiles.open(source);
+        self.screen = Screen::Dotfiles;
     }
 
     fn ask_run(&mut self) {
@@ -598,6 +656,7 @@ impl App {
                 .draw(frame, body, &self.state, &self.info, &mut self.hits),
             Screen::Run => self.run_screen.draw(frame, body, &mut self.hits),
             Screen::History => self.history.draw(frame, body, &mut self.hits),
+            Screen::Dotfiles => self.dotfiles.draw(frame, body, &mut self.hits),
         }
         let keys = self.key_hints();
         draw_key_hints(frame, hints, &keys, &mut self.hits);
@@ -633,6 +692,7 @@ impl App {
             Screen::Main => self.main.key_hints(),
             Screen::Run => self.run_screen.key_hints(),
             Screen::History => self.history.key_hints(),
+            Screen::Dotfiles => self.dotfiles.key_hints(),
         }
     }
 
@@ -663,6 +723,46 @@ impl App {
         }
         frame.render_widget(Paragraph::new(Line::from(spans)), area);
     }
+}
+
+/// Offered the first time the Dotfiles screen opens.
+const DEFAULT_DOTFILES: &str = "~/dotfiles";
+
+const STOW_INSTALL: &str = "sudo pacman -S stow";
+
+/// Dotfiles needs GNU Stow. The only way on is back to the main screen.
+fn no_stow_modal() -> Modal {
+    Modal::new(
+        "GNU Stow is not installed",
+        Modal::text(&format!(
+            "The Dotfiles screen manages GNU Stow packages, and stow is not\ninstalled. Install it, then press D again:\n\n  {STOW_INSTALL}"
+        )),
+        vec![Button::new(
+            &[KeyCode::Enter, KeyCode::Esc, KeyCode::Char('q')],
+            "Esc",
+            "back to main menu",
+            None,
+        )],
+    )
+    .with_copy(STOW_INSTALL.to_string())
+}
+
+/// Ask where the stow packages live. `error` explains a rejected value.
+fn dotfiles_dir_modal(value: &str, error: Option<&str>) -> Modal {
+    let mut modal = Modal::input(
+        "Dotfiles folder",
+        "Where your GNU Stow packages live. Each folder in it is one package,\nlinked into your home folder (stow -d <this folder> -t ~).\n\nChange it later with p on the Dotfiles screen.",
+        value,
+        "dotfiles-dir",
+    );
+    if let Some(error) = error {
+        modal.body.push(Line::from(""));
+        modal.body.push(Line::from(Span::styled(
+            error.to_string(),
+            theme::status(Status::Failed),
+        )));
+    }
+    modal
 }
 
 /// Popups for the start of a session, shown one after another.
@@ -854,7 +954,17 @@ impl App {
             Screen::Main => "main",
             Screen::Run => "run",
             Screen::History => "history",
+            Screen::Dotfiles => "dotfiles",
         }
+    }
+
+    /// Wait for the Dotfiles scan to finish.
+    pub fn set_stow_check_for_test(&mut self, check: fn() -> bool) {
+        self.stow_check = check;
+    }
+
+    pub fn wait_dotfiles_for_test(&mut self) {
+        self.dotfiles.wait_for_test();
     }
 }
 

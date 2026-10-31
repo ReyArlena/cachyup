@@ -5,9 +5,10 @@ Sets up and updates a CachyOS install: a Rust binary with a ratatui TUI and a he
 ## Layout
 
 - `catalog.toml` the built-in app and tweak list, compiled in. `src/catalog.rs` parses it plus `~/.config/cachyup/user-apps.toml`.
+- `src/dotfiles.rs` read-only GNU Stow scan (link state, warnings, `stow --simulate` previews), shown by `tui/dotfiles.rs`.
 - `src/config.rs` (config.toml, `UPDATE_STEPS`, `NUMBER_SETTINGS`), `src/selection.rs` (on/off per app/tweak, launch reconciliation), `src/state.rs` (seen and managed apps).
 - `src/engine/` the core: `plan.rs` builds the ordered steps, `steps.rs` holds every step body, `ctx.rs` runs commands (streamed, dry-run aware), `runner.rs` the worker thread, `record.rs` run.json.
-- `src/tui/` the interface: `app.rs` event loop and effects, `main_screen.rs`, `run_screen.rs`, `history.rs`, `widgets.rs`, `input.rs`, `theme.rs`.
+- `src/tui/` the interface: `app.rs` event loop and effects, `main_screen.rs`, `run_screen.rs`, `history.rs`, `dotfiles.rs`, `widgets.rs`, `input.rs`, `theme.rs`.
 - `src/app.rs` shared bootstrap (`AppState`) for the TUI and the CLI.
 
 ## Rules

@@ -4,6 +4,7 @@ pub mod app;
 pub mod catalog;
 pub mod cli;
 pub mod config;
+pub mod dotfiles;
 pub mod engine;
 pub mod paths;
 pub mod selection;

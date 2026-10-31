@@ -4,6 +4,7 @@
 //! - `main_screen.rs`  tasks and their options
 //! - `run_screen.rs`   a run in progress
 //! - `history.rs`      past runs
+//! - `dotfiles.rs`     GNU Stow packages and their links
 //! - `widgets.rs`      panes, modals, text input, the output view
 //! - `input.rs`        key and mouse mapping, the click map
 //!
@@ -12,6 +13,7 @@
 //! TUI comes back.
 
 mod app;
+mod dotfiles;
 mod history;
 mod input;
 mod main_screen;
@@ -48,6 +50,11 @@ pub enum Effect {
     CloseRun,
     History,
     CloseHistory,
+    /// Open the Dotfiles screen (asks for the folder the first time).
+    Dotfiles,
+    CloseDotfiles,
+    /// Ask for the dotfiles folder.
+    AskDotfilesDir,
     Quit,
 }
 

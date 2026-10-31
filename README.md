@@ -43,7 +43,7 @@ whole session, so a long AUR build never stops at a password prompt.
 │ ✓ Install Tweaks            ││                                                       │
 │   2 of 3 selected           ││ AUR packages  18/18                                   │
 └─────────────────────────────┘└───────────────────────────────────────────────────────┘
- Space toggle  c options  r run  H history  ? help  q quit
+ Space toggle  c options  r run  H history  D dotfiles  ? help  q quit
 ```
 
 The left pane lists the three tasks; `Space` switches one on or off. The right pane shows
@@ -73,6 +73,30 @@ selected and copied as usual.
 
 `H` opens the history: past runs on the left, the selected run's output on the right,
 `x` deletes one.
+
+### Dotfiles
+
+`D` opens the Dotfiles screen for a [GNU Stow](https://www.gnu.org/software/stow/) folder.
+It needs stow: if it is not installed, a popup says so and goes back to the main screen.
+The first time it asks where the folder is (`p` changes it later); each folder in it is a
+package linked into your home folder. The left pane lists the packages, grouped into
+linked, not linked and folders that are not stow packages, with how each is linked:
+
+- **folder link**: the whole folder is one link into the package (stow "folded" it), so
+  new files in the package show up without restowing.
+- **file links**: each file is its own link inside a real folder, so new files need a
+  restow.
+- **partial**, **used by** another package that links the same folder, **blocked** by a
+  real file in the way, or **not linked**.
+
+The right pane lists every link, the `.gitignore` rules that apply to the package (with
+their line numbers) and what they ignore, any warnings, and what `stow --simulate` says
+linking it would do now. Warnings cover packages that clash with each other, real files in the way,
+files that would land straight in `~`, and folder links that keep git-ignored files (app
+data, private keys) inside the repo, where a `git clean -fdX` would delete them. `!` marks
+a package with warnings, red when one is serious. The screen is read-only: nothing is
+linked or unlinked. Folders that are not packages can be hidden with `ignore` under
+`[dotfiles]` in `config.toml`.
 
 ### Dry run
 
@@ -179,7 +203,7 @@ shows them straight away next time.
 
 | Path | What |
 |------|------|
-| `~/.config/cachyup/config.toml` | Tasks, update steps, cleanup numbers |
+| `~/.config/cachyup/config.toml` | Tasks, update steps, cleanup numbers, dotfiles folder |
 | `~/.config/cachyup/selection.toml` | On/off for every app and tweak |
 | `~/.config/cachyup/user-apps.toml` | Your own apps and tweaks (optional) |
 | `~/.local/state/cachyup/state.toml` | What cachyup has seen and installed (not for editing) |
@@ -248,6 +272,7 @@ catalog.toml          the built-in app and tweak list
 install.sh            downloads the release binary
 src/catalog.rs        catalog + user-apps.toml parsing, duplicate detection
 src/config.rs         config.toml, the update steps and their dependencies
+src/dotfiles.rs       stow packages: link state, warnings, stow --simulate previews
 src/selection.rs      selection.toml and launch-time reconciliation (new, removed)
 src/state.rs          state.toml
 src/system.rs         read-only probes: installed packages, package info

@@ -89,6 +89,18 @@ pub struct Config {
     /// Update step id -> on/off. Unknown ids are kept but ignored.
     pub update: BTreeMap<String, bool>,
     pub settings: Settings,
+    pub dotfiles: Dotfiles,
+}
+
+/// The Dotfiles screen (GNU Stow packages).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Dotfiles {
+    /// The stow folder. Unset until the screen is first opened, which asks for it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dir: Option<String>,
+    /// Folders in it that are not stow packages.
+    pub ignore: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -144,6 +156,7 @@ impl Default for Config {
                 .map(|s| (s.id.to_string(), true))
                 .collect(),
             settings: Settings::default(),
+            dotfiles: Dotfiles::default(),
         }
     }
 }
@@ -247,6 +260,7 @@ mod tests {
         c.tasks.tweaks = false;
         c.update.insert("orphans".into(), false);
         c.settings.yay_cache_keep_days = 10;
+        c.dotfiles.dir = Some("~/dotfiles".into());
         c.save(&path).unwrap();
         assert_eq!(Config::load(&path).unwrap(), c);
 

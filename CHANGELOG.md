@@ -13,6 +13,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Dux Files (AUR) with two tweaks: its optional extras (thumbnails, previews, mounts,
   shares) and setting it as the default file manager.
 - Photocraft (AUR).
+- Dotfiles screen (`D`) for a GNU Stow folder, asked for the first time it opens: each
+  package with how it is linked (one folder link or single-file links), partial, used by
+  another package, blocked or not linked, every link, its `.gitignore` rules and what they
+  ignore, what `stow --simulate` would do, and warnings for clashing packages, real files
+  in the way, and git-ignored files (including private keys) kept inside the repo by a
+  folder link. Read-only, and only opens when stow is installed.
 
 ## [0.1.0] - 2026-10-23
 
