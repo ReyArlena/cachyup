@@ -98,12 +98,20 @@ impl Installed {
     /// `None` when it cannot tell.
     pub fn app(&self, app: &App, paths: &Paths) -> Option<bool> {
         match app.source {
-            Source::Pacman | Source::Aur => self.packages.as_ref().map(|p| p.contains(&app.name)),
-            Source::Flatpak => self.flatpaks.as_ref().map(|f| f.contains(&app.name)),
             Source::Installer => app
                 .installer
                 .as_ref()
                 .map(|i| installer_present(&i.check, paths)),
+            source => self.package(source, &app.name),
+        }
+    }
+
+    /// A package from pacman, the AUR or flathub. `None` when it cannot tell.
+    pub fn package(&self, source: Source, name: &str) -> Option<bool> {
+        match source {
+            Source::Pacman | Source::Aur => self.packages.as_ref().map(|p| p.contains(name)),
+            Source::Flatpak => self.flatpaks.as_ref().map(|f| f.contains(name)),
+            Source::Installer => None,
         }
     }
 }

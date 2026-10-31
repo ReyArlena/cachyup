@@ -6,6 +6,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Tweaks can install optional packages with `installs` (bare names are pacman, or
+  `aur/name`, `flatpak/id`), on their own or before their `set` values.
+- Dux Files (AUR) with two tweaks: its optional extras (thumbnails, previews, mounts,
+  shares) and setting it as the default file manager.
+
 ## [0.1.0] - 2026-10-23
 
 The bash script rewritten as a Rust terminal UI.

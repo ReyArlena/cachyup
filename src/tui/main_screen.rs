@@ -171,7 +171,7 @@ impl MainScreen {
             .catalog
             .tweaks
             .iter()
-            .map(|t| (t.id.clone(), tweak_applied(t, &app.paths)))
+            .map(|t| (t.id.clone(), tweak_applied(t, &app.paths, &app.installed)))
             .collect();
         self.tweak_current = app
             .catalog
@@ -716,6 +716,9 @@ impl MainScreen {
                 ]));
                 body.push(Line::from(""));
                 body.push(Line::from(Span::styled("Changes", theme::heading())));
+                for p in &t.installs {
+                    body.push(Line::from(format!("  install {p}")));
+                }
                 for op in &t.sets {
                     body.push(Line::from(match op {
                         crate::catalog::SetOp::Json { file, key, value } => {

@@ -38,6 +38,10 @@ impl Source {
         }
     }
 
+    pub fn from_id(id: &str) -> Option<Self> {
+        Source::ALL.into_iter().find(|s| s.id() == id)
+    }
+
     /// Where it comes from, for the info popup.
     pub fn label(self) -> &'static str {
         match self {
@@ -115,8 +119,49 @@ pub struct Tweak {
     pub description: Option<String>,
     pub unless_cmd: Option<String>,
     pub default: Option<bool>,
+    /// Packages installed before `sets` are written (optional dependencies).
+    pub installs: Vec<Package>,
     pub sets: Vec<SetOp>,
     pub origin: Origin,
+}
+
+/// A package a tweak installs, from any package source.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Package {
+    pub source: Source,
+    pub name: String,
+}
+
+impl Package {
+    /// `name` (pacman) or `source/name`; installers are not packages.
+    fn parse(spec: &str) -> Result<Self> {
+        let (source, name) = match spec.split_once('/') {
+            Some((s, n)) => (
+                Source::from_id(s)
+                    .filter(|s| *s != Source::Installer)
+                    .with_context(|| format!("{spec}: unknown source {s:?}"))?,
+                n,
+            ),
+            None => (Source::Pacman, spec),
+        };
+        let name = name.trim();
+        if name.is_empty() || name.contains(char::is_whitespace) {
+            bail!("invalid package name {spec:?}");
+        }
+        Ok(Package {
+            source,
+            name: name.to_string(),
+        })
+    }
+}
+
+impl fmt::Display for Package {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.source {
+            Source::Pacman => f.write_str(&self.name),
+            source => write!(f, "{source}/{}", self.name),
+        }
+    }
 }
 
 /// One value a tweak writes.
@@ -385,6 +430,9 @@ struct TweakDef {
     description: Option<String>,
     unless_cmd: Option<String>,
     default: Option<bool>,
+    #[serde(default)]
+    installs: Vec<String>,
+    #[serde(default)]
     set: Vec<SetDef>,
 }
 
@@ -400,9 +448,15 @@ struct SetDef {
 
 impl TweakDef {
     fn into_tweak(self, origin: Origin) -> Result<Tweak> {
-        if self.set.is_empty() {
-            bail!("tweak {}: needs at least one `set`", self.id);
+        if self.set.is_empty() && self.installs.is_empty() {
+            bail!("tweak {}: needs `installs` or at least one `set`", self.id);
         }
+        let installs = self
+            .installs
+            .iter()
+            .map(|spec| Package::parse(spec))
+            .collect::<Result<Vec<_>>>()
+            .with_context(|| format!("tweak {}", self.id))?;
         let mut sets = Vec::new();
         for s in self.set {
             sets.push(match (s.json, s.ini) {
@@ -435,6 +489,7 @@ impl TweakDef {
             description: self.description,
             unless_cmd: self.unless_cmd,
             default: self.default,
+            installs,
             sets,
             origin,
         })
@@ -459,7 +514,36 @@ mod tests {
         let junction = c.app("pacman/junction").unwrap();
         assert_eq!(junction.unless_cmd.as_deref(), Some("dms"));
         assert_eq!(c.tweaks_for("pacman/discord").count(), 1);
+        let extras = c.tweak("dux-files-extras").unwrap();
+        assert_eq!(extras.installs.len(), 5);
+        assert!(extras.sets.is_empty());
         assert!(c.warnings.is_empty());
+    }
+
+    #[test]
+    fn installs_parse_sources_and_reject_bad_specs() {
+        let p = Package::parse("poppler").unwrap();
+        assert_eq!((p.source, p.name.as_str()), (Source::Pacman, "poppler"));
+        let p = Package::parse("aur/foo-git").unwrap();
+        assert_eq!((p.source, p.name.as_str()), (Source::Aur, "foo-git"));
+        assert_eq!(p.to_string(), "aur/foo-git");
+        let p = Package::parse("flatpak/org.example.App").unwrap();
+        assert_eq!(p.source, Source::Flatpak);
+        assert!(Package::parse("installer/foo").is_err());
+        assert!(Package::parse("snap/foo").is_err());
+        assert!(Package::parse("aur/").is_err());
+        assert!(Package::parse("two words").is_err());
+
+        let file: CatalogFile = toml::from_str(
+            r#"
+            [[tweak]]
+            id = "empty"
+            name = "nothing"
+            "#,
+        )
+        .unwrap();
+        let def = file.tweak.into_iter().next().unwrap();
+        assert!(def.into_tweak(Origin::Builtin).is_err());
     }
 
     #[test]

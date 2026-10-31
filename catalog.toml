@@ -132,6 +132,7 @@ aur = [
     "dankcalendar-bin",
     "discord-ptb",
     "dsearch-bin",
+    "dux-files-git",
     "figma-linux-next-bin",
     "google-chrome",
     "herdr-bin",
@@ -190,7 +191,10 @@ check = "~/.local/bin/spotify-url-helper"
 install = "curl -fsSL https://raw.githubusercontent.com/ReyArlena/spotify-url-helper/main/install.sh | sh"
 
 # Config tweaks. `app` ties a tweak to an app (shown under it in the app list,
-# skipped while that app is not installed). Each `set` entry writes one value:
+# skipped while that app is not installed). A tweak needs `installs`, `set`,
+# or both. `installs` lists optional packages, installed before `set`:
+#   installs = ["poppler", "aur/foo-git", "flatpak/org.example.App"]   bare = pacman
+# Each `set` entry writes one value:
 #   { json = FILE, key = "a.b", value = ... }                  JSON key (dotted path)
 #   { ini = FILE, section = "S", key = "k", value = "v" }      ini-style key
 # Files are written through symlinks, so stow-managed dotfiles stay links.
@@ -218,3 +222,17 @@ set = [
     { ini = "~/.config/mimeapps.list", section = "Default Applications", key = "x-scheme-handler/http", value = "re.sol.junction.desktop" },
     { ini = "~/.config/mimeapps.list", section = "Default Applications", key = "x-scheme-handler/https", value = "re.sol.junction.desktop" },
 ]
+
+[[tweak]]
+id = "dux-files-extras"
+app = "aur/dux-files-git"
+name = "Dux Files Optional Extras (Thumbnails, Shares, etc)"
+description = "Optional packages Dux Files uses when present: bubblewrap, ffmpegthumbnailer, poppler, gvfs, udisks2."
+installs = ["bubblewrap", "ffmpegthumbnailer", "poppler", "gvfs", "udisks2"]
+
+[[tweak]]
+id = "dux-files-default"
+app = "aur/dux-files-git"
+name = "Set Dux Files as default"
+description = "Make Dux Files the default file manager (xdg-mime default for inode/directory)."
+set = [{ ini = "~/.config/mimeapps.list", section = "Default Applications", key = "inode/directory", value = "dev.duxlabs.files.desktop" }]

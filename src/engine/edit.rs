@@ -8,6 +8,7 @@ use serde_json::Value;
 
 use crate::catalog::{SetOp, Tweak};
 use crate::paths::{Paths, write_file};
+use crate::system::Installed;
 
 /// The value at a dotted key, or `None` when the file, key or JSON is missing.
 pub fn json_get(path: &Path, key: &str) -> Option<Value> {
@@ -140,9 +141,13 @@ pub fn op_applied(op: &SetOp, paths: &Paths) -> bool {
     }
 }
 
-/// Whether every value of a tweak is in place.
-pub fn tweak_applied(tweak: &Tweak, paths: &Paths) -> bool {
-    tweak.sets.iter().all(|op| op_applied(op, paths))
+/// Whether every package of a tweak is installed and every value in place.
+pub fn tweak_applied(tweak: &Tweak, paths: &Paths, installed: &Installed) -> bool {
+    tweak
+        .installs
+        .iter()
+        .all(|p| installed.package(p.source, &p.name) == Some(true))
+        && tweak.sets.iter().all(|op| op_applied(op, paths))
 }
 
 /// What the file holds now for the first value of a tweak that is not in
@@ -250,6 +255,7 @@ mod tests {
             description: None,
             unless_cmd: None,
             default: None,
+            installs: vec![],
             sets: vec![SetOp::Ini {
                 file: "~/mimeapps.list".into(),
                 section: "Default Applications".into(),

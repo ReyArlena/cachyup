@@ -421,8 +421,22 @@ fn apply_tweak(cx: &mut Ctx, tweak: &Tweak, app: Option<&App>, app_queued: bool)
         }
     }
     let paths = cx.paths.clone();
-    if tweak.sets.iter().all(|op| op_applied(op, &paths)) {
+    let all_installed = |cx: &Ctx| {
+        tweak
+            .installs
+            .iter()
+            .all(|p| package_installed(cx, p.source, &p.name))
+    };
+    if all_installed(cx) && tweak.sets.iter().all(|op| op_applied(op, &paths)) {
         return Outcome::skipped("already applied");
+    }
+    // Optional packages first: each one checked, installed, checked again.
+    for p in &tweak.installs {
+        let out = install_package(cx, p.source, &p.name, None);
+        if out.status == Status::Failed {
+            let reason = out.reason.unwrap_or_else(|| "see log".into());
+            return Outcome::failed(format!("{p}: {reason}"));
+        }
     }
     for op in &tweak.sets {
         if op_applied(op, &paths) {
@@ -444,7 +458,7 @@ fn apply_tweak(cx: &mut Ctx, tweak: &Tweak, app: Option<&App>, app_queued: bool)
     if cx.dry {
         return done(cx);
     }
-    if tweak.sets.iter().all(|op| op_applied(op, &paths)) {
+    if all_installed(cx) && tweak.sets.iter().all(|op| op_applied(op, &paths)) {
         Outcome::success()
     } else {
         Outcome::failed("value did not stick")
