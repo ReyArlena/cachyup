@@ -159,7 +159,14 @@ install = "curl -fsSL https://example.com/install.sh | sh"
 id = "htop-tree"
 app = "pacman/htop"                      # shown under htop, skipped while it is missing
 name = "Tree view"
-set = [{ ini = "~/.config/htop/htoprc", section = "x", key = "tree_view", value = 1 }]
+set = [
+    {
+        ini = "~/.config/htop/htoprc",
+        section = "x",
+        key = "tree_view",
+        value = 1,
+    },
+]
 ```
 
 Your entries start switched on the first time they are seen. An entry that repeats one of
