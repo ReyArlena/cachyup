@@ -437,7 +437,7 @@ impl App {
                 .catalog
                 .apps
                 .iter()
-                .filter(|a| state.selection.app_on(&a.key()))
+                .filter(|a| state.config.selection.app_on(&a.key()))
                 .collect();
             let missing = selected
                 .iter()
@@ -453,7 +453,7 @@ impl App {
                 .catalog
                 .tweaks
                 .iter()
-                .filter(|t| state.selection.tweak_on(&t.id))
+                .filter(|t| state.config.selection.tweak_on(&t.id))
                 .count();
             body.push(Line::from(vec![
                 label("Tweaks"),
@@ -669,12 +669,9 @@ impl App {
 fn startup_modals(state: &AppState) -> Vec<Modal> {
     let mut out = Vec::new();
     if !state.catalog.warnings.is_empty() {
-        let mut text = String::from("Problems in ~/.config/cachyup/user-apps.toml:\n\n");
+        let mut text = String::from("About ~/.config/cachyup:\n\n");
         for w in &state.catalog.warnings {
-            text.push_str(&format!(
-                "  • {}\n",
-                w.trim_start_matches("user-apps.toml: ")
-            ));
+            text.push_str(&format!("  • {}\n", w.trim_start_matches("apps.toml: ")));
         }
         out.push(Modal::message("Your app list", text.trim_end()));
     }
@@ -683,6 +680,7 @@ fn startup_modals(state: &AppState) -> Vec<Modal> {
             format!("{} ({})", a.display_name(), a.source)
         })
     };
+    let builtin = crate::catalog::Catalog::builtin();
     if !state.launch.removed.is_empty() {
         let mut text = String::from(
             "These apps were uninstalled since cachyup installed them,\nso they have been switched off in your app list:\n\n",
@@ -696,29 +694,20 @@ fn startup_modals(state: &AppState) -> Vec<Modal> {
     let new_count = state.launch.new_apps.len() + state.launch.new_tweaks.len();
     if new_count > 0 {
         let mut text =
-            String::from("cachyup was updated and has new entries. They start switched off:\n\n");
+            String::from("cachyup was updated and has entries that are not in your apps.toml:\n\n");
         for key in &state.launch.new_apps {
-            text.push_str(&format!("  • {}\n", name(key)));
+            let shown = builtin.app(key).map_or(key.clone(), |a| {
+                format!("{} ({})", a.display_name(), a.source)
+            });
+            text.push_str(&format!("  • {shown}\n"));
         }
         for id in &state.launch.new_tweaks {
-            if let Some(t) = state.catalog.tweak(id) {
+            if let Some(t) = builtin.tweak(id) {
                 text.push_str(&format!("  • tweak: {}\n", t.name));
             }
         }
-        text.push_str("\nReview them now?");
-        out.push(Modal::new(
-            "New in cachyup",
-            Modal::text(&text),
-            vec![
-                Button::new(
-                    &[KeyCode::Enter, KeyCode::Char('y')],
-                    "Enter",
-                    "review",
-                    Some("review-new"),
-                ),
-                Button::new(&[KeyCode::Esc, KeyCode::Char('n')], "Esc", "later", None),
-            ],
-        ));
+        text.push_str("\nAdd the ones you want to ~/.config/cachyup/apps.toml.");
+        out.push(Modal::message("New in cachyup", &text));
     }
     out
 }

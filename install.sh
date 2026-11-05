@@ -2,12 +2,17 @@
 # Installs (or removes) cachyup from the latest GitHub release.
 #
 #   curl -fsSL https://reyarlena.github.io/cachyup/install.sh | sh     # install or update
+#   curl -fsSL https://reyarlena.github.io/cachyup/install.sh | sh -s -- --apps URL
+#                                 # also start from your own apps file (URL or path)
 #   sh install.sh --uninstall     # remove the binary
 #   sh install.sh --purge         # remove the binary, settings, state and run history
 #
 # Installs to ~/.local/bin/cachyup (override with CACHYUP_BIN_DIR). Run it
 # again at any time to update. cachyup runs as your normal user and asks for
 # sudo itself, so this script refuses to run as root.
+#
+# --apps puts the file at ~/.config/cachyup/apps.toml, unless one is already
+# there. An apps file holds commands that run as you: only use one you trust.
 # To build from source instead, see the Develop section of the README.
 set -e
 
@@ -22,28 +27,44 @@ if [ "$(id -u)" = "0" ]; then
     exit 1
 fi
 
-case "$1" in
-    --uninstall|--purge)
-        if [ -e "$BIN_DIR/cachyup" ] || [ -L "$BIN_DIR/cachyup" ]; then
-            rm -f "$BIN_DIR/cachyup"
-            echo "Removed $BIN_DIR/cachyup"
-        else
-            echo "cachyup was not installed in $BIN_DIR"
-        fi
-        if [ "$1" = "--purge" ]; then
-            rm -rf "$CONFIG_DIR" "$STATE_DIR" "$CACHE_DIR"
-            echo "Removed $CONFIG_DIR, $STATE_DIR and $CACHE_DIR"
-        else
-            echo "Settings and run history kept in $CONFIG_DIR and $STATE_DIR (use --purge to remove)"
-        fi
-        exit 0
-        ;;
-    "") ;;
-    *)
-        echo "Usage: install.sh [--uninstall | --purge]" >&2
-        exit 1
-        ;;
-esac
+usage() {
+    echo "Usage: install.sh [--apps URL|PATH] | --uninstall | --purge" >&2
+    exit 1
+}
+
+APPS=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --uninstall|--purge)
+            if [ -e "$BIN_DIR/cachyup" ] || [ -L "$BIN_DIR/cachyup" ]; then
+                rm -f "$BIN_DIR/cachyup"
+                echo "Removed $BIN_DIR/cachyup"
+            else
+                echo "cachyup was not installed in $BIN_DIR"
+            fi
+            if [ "$1" = "--purge" ]; then
+                rm -rf "$CONFIG_DIR" "$STATE_DIR" "$CACHE_DIR"
+                echo "Removed $CONFIG_DIR, $STATE_DIR and $CACHE_DIR"
+            else
+                echo "Settings and run history kept in $CONFIG_DIR and $STATE_DIR (use --purge to remove)"
+            fi
+            exit 0
+            ;;
+        --apps)
+            [ -n "${2:-}" ] || usage
+            APPS="$2"
+            shift 2
+            ;;
+        --apps=*)
+            APPS="${1#--apps=}"
+            [ -n "$APPS" ] || usage
+            shift
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
 
 if ! command -v curl >/dev/null 2>&1; then
     echo "curl is required" >&2
@@ -79,6 +100,35 @@ trap - EXIT
 
 echo
 echo "Installed $BIN_DIR/cachyup ($("$BIN_DIR/cachyup" --version 2>/dev/null || echo 'version unknown'))"
+
+# An apps file of your own, only when there is none yet: cachyup never
+# replaces a file you may have edited.
+if [ -n "$APPS" ]; then
+    apps_file="$CONFIG_DIR/apps.toml"
+    if [ -e "$apps_file" ]; then
+        echo "Kept the existing $apps_file (--apps ignored)"
+    else
+        mkdir -p "$CONFIG_DIR"
+        tmp=$(mktemp "$CONFIG_DIR/.apps.XXXXXX")
+        trap 'rm -f "$tmp"' EXIT
+        case "$APPS" in
+            http://*|https://*)
+                echo "Downloading $APPS"
+                curl -fsSL "$APPS" -o "$tmp" || { echo "Download of $APPS failed" >&2; exit 1; }
+                ;;
+            *)
+                cp "$APPS" "$tmp" || { echo "Could not read $APPS" >&2; exit 1; }
+                ;;
+        esac
+        if [ ! -s "$tmp" ]; then
+            echo "$APPS is empty" >&2
+            exit 1
+        fi
+        mv -f "$tmp" "$apps_file"
+        trap - EXIT
+        echo "Apps file: $apps_file"
+    fi
+fi
 case ":$PATH:" in
     *":$BIN_DIR:"*)
         echo "Run: cachyup"

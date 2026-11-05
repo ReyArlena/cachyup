@@ -1,6 +1,7 @@
 //! cachyup: set up and update a CachyOS install.
 
 pub mod app;
+pub mod apps_edit;
 pub mod catalog;
 pub mod cli;
 pub mod config;

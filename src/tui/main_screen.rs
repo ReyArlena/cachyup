@@ -249,7 +249,7 @@ impl MainScreen {
                     }
                     let on = apps
                         .iter()
-                        .filter(|a| app.selection.app_on(&a.key()))
+                        .filter(|a| app.config.selection.app_on(&a.key()))
                         .count();
                     rows.push(Row::Header(format!(
                         "{}  {on}/{}",
@@ -481,6 +481,9 @@ impl MainScreen {
             Action::Char('a') if self.current() == Task::Apps => {
                 return self.toggle_group(&rows, app);
             }
+            Action::Char('A') if self.current() != Task::Update => {
+                return self.toggle_all(&rows, app);
+            }
             Action::Toggle | Action::Confirm => {
                 if let Some(row) = rows.get(self.cursor[self.task]).cloned() {
                     return self.toggle(&row, app);
@@ -536,12 +539,12 @@ impl MainScreen {
             }
             Row::Fixed(..) => vec![Effect::Toast("always runs".into())],
             Row::App(key) => {
-                let on = app.selection.app_on(key);
+                let on = app.config.selection.app_on(key);
                 app.set_app(key, !on);
                 vec![Effect::SaveSelection]
             }
             Row::Tweak { id, .. } => {
-                let on = app.selection.tweak_on(id);
+                let on = app.config.selection.tweak_on(id);
                 let mut effects = vec![Effect::SaveSelection];
                 if let Some(key) = app.set_tweak(id, !on) {
                     let name = app
@@ -556,6 +559,52 @@ impl MainScreen {
             }
             Row::Header(_) | Row::Blank | Row::Desc(_) => Vec::new(),
         }
+    }
+
+    /// `A`: every app and tweak shown (so a filter narrows it) on, or all
+    /// off if they already are.
+    fn toggle_all(&mut self, rows: &[Row], app: &mut AppState) -> Vec<Effect> {
+        let keys: Vec<String> = rows
+            .iter()
+            .filter_map(|r| match r {
+                Row::App(k) => Some(k.clone()),
+                _ => None,
+            })
+            .collect();
+        let ids: Vec<String> = rows
+            .iter()
+            .filter_map(|r| match r {
+                Row::Tweak { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect();
+        if keys.is_empty() && ids.is_empty() {
+            return Vec::new();
+        }
+        let all_on = keys.iter().all(|k| app.config.selection.app_on(k))
+            && ids.iter().all(|id| app.config.selection.tweak_on(id));
+        for k in &keys {
+            app.set_app(k, !all_on);
+        }
+        for id in &ids {
+            app.config.selection.tweaks.insert(id.clone(), !all_on);
+        }
+        let what = match (keys.len(), ids.len()) {
+            (n, 0) => format!("{n} apps"),
+            (0, m) => format!("{m} tweaks"),
+            (n, m) => format!("{n} apps and {m} tweaks"),
+        };
+        vec![
+            Effect::SaveSelection,
+            Effect::Toast(format!(
+                "{} {what}",
+                if all_on {
+                    "switched off"
+                } else {
+                    "switched on"
+                }
+            )),
+        ]
     }
 
     /// `a`: all apps in the cursor's group on, or all off if they already are.
@@ -573,7 +622,7 @@ impl MainScreen {
                 _ => None,
             })
             .collect();
-        let all_on = keys.iter().all(|k| app.selection.app_on(k));
+        let all_on = keys.iter().all(|k| app.config.selection.app_on(k));
         for k in &keys {
             app.set_app(k, !all_on);
         }
@@ -641,18 +690,12 @@ impl MainScreen {
                 ]));
                 body.push(Line::from(vec![
                     label("In your list"),
-                    if app.selection.app_on(key) {
+                    if app.config.selection.app_on(key) {
                         Span::styled("on", theme::on())
                     } else {
                         Span::styled("off", theme::off())
                     },
                 ]));
-                if a.origin == Origin::User {
-                    body.push(Line::from(vec![
-                        label("Added by"),
-                        Span::raw("user-apps.toml"),
-                    ]));
-                }
                 if let Some(package) = a.unless_cmd.as_ref().and_then(|c| self.conditions.get(c)) {
                     body.push(Line::from(vec![
                         label("Default off"),
@@ -782,11 +825,15 @@ impl MainScreen {
                     ("i", "info"),
                     ("I", "descriptions"),
                     ("a", "all in group"),
+                    ("A", "all"),
                     ("/", "filter"),
                 ]),
-                Task::Tweaks => {
-                    hints.extend([("i", "info"), ("I", "descriptions"), ("/", "filter")])
-                }
+                Task::Tweaks => hints.extend([
+                    ("i", "info"),
+                    ("I", "descriptions"),
+                    ("A", "all"),
+                    ("/", "filter"),
+                ]),
             }
             hints.push(("Esc", "back"));
         }
@@ -1025,7 +1072,7 @@ impl MainScreen {
                 let Some(a) = app.catalog.app(key) else {
                     return Line::from(key.clone());
                 };
-                let on = app.selection.app_on(key);
+                let on = app.config.selection.app_on(key);
                 let new = self.new_items.contains(key);
                 let (m, mut style) = mark(on, true);
                 if new && !on {
@@ -1060,7 +1107,7 @@ impl MainScreen {
                 let Some(t) = app.catalog.tweak(id) else {
                     return Line::from(id.clone());
                 };
-                let on = app.selection.tweak_on(id);
+                let on = app.config.selection.tweak_on(id);
                 let new = self.new_items.contains(id);
                 let (m, mut style) = mark(on, true);
                 if new && !on {
@@ -1185,7 +1232,7 @@ fn table_line(
 
 /// Status column text for an app.
 pub fn app_status(a: &App, app: &AppState, info: &InfoMap) -> (String, Style) {
-    let on = app.selection.app_on(&a.key());
+    let on = app.config.selection.app_on(&a.key());
     let available = info.get(&a.key()).and_then(|i| i.available);
     match app.is_installed(a) {
         Some(true) => ("Installed".into(), theme::on()),
@@ -1213,7 +1260,7 @@ fn task_summary(task: Task, app: &AppState) -> String {
                 .catalog
                 .apps
                 .iter()
-                .filter(|a| app.selection.app_on(&a.key()))
+                .filter(|a| app.config.selection.app_on(&a.key()))
                 .collect();
             let missing = selected
                 .iter()
@@ -1230,7 +1277,7 @@ fn task_summary(task: Task, app: &AppState) -> String {
                 .catalog
                 .tweaks
                 .iter()
-                .filter(|t| app.selection.tweak_on(&t.id))
+                .filter(|t| app.config.selection.tweak_on(&t.id))
                 .count();
             format!("{on} of {} selected", app.catalog.tweaks.len())
         }

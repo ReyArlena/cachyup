@@ -102,7 +102,7 @@ fn headless(paths: Paths, dry: bool) -> Result<i32> {
     }
     if !app.launch.new_apps.is_empty() {
         eprintln!(
-            "New in cachyup (off until you switch them on): {}",
+            "New in cachyup, not in your apps.toml: {}",
             app.launch.new_apps.join(", ")
         );
     }

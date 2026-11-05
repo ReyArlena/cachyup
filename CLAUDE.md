@@ -4,8 +4,8 @@ Sets up and updates a CachyOS install: a Rust binary with a ratatui TUI and a he
 
 ## Layout
 
-- `catalog.toml` the built-in app and tweak list, compiled in. `src/catalog.rs` parses it plus `~/.config/cachyup/user-apps.toml`.
-- `src/config.rs` (config.toml, `UPDATE_STEPS`, `NUMBER_SETTINGS`), `src/selection.rs` (on/off per app/tweak, launch reconciliation), `src/state.rs` (seen and managed apps).
+- `apps.toml` the app and tweak list, compiled in and copied to `~/.config/cachyup/apps.toml` on first launch; the copy is what runs. `src/catalog.rs` parses it, `src/apps_edit.rs` merges entries into the user's copy without touching its layout (toml_edit).
+- `src/config.rs` (config.toml, `UPDATE_STEPS`, `NUMBER_SETTINGS`, holds the selection), `src/selection.rs` (on/off per app/tweak under `[apps]`/`[tweaks]` in config.toml, launch reconciliation), `src/state.rs` (announced built-in entries, managed apps).
 - `src/engine/` the core: `plan.rs` builds the ordered steps, `steps.rs` holds every step body, `ctx.rs` runs commands (streamed, dry-run aware), `runner.rs` the worker thread, `record.rs` run.json.
 - `src/tui/` the interface: `app.rs` event loop and effects, `main_screen.rs`, `run_screen.rs`, `history.rs`, `widgets.rs`, `input.rs`, `theme.rs`.
 - `src/app.rs` shared bootstrap (`AppState`) for the TUI and the CLI.

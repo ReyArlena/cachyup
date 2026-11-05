@@ -1,8 +1,7 @@
 //! Where cachyup keeps its files (XDG base directories).
 //!
-//!   ~/.config/cachyup/config.toml       tasks, update steps, cleanup settings
-//!   ~/.config/cachyup/selection.toml    on/off for every app and tweak
-//!   ~/.config/cachyup/user-apps.toml    the user's own additions (optional)
+//!   ~/.config/cachyup/apps.toml         the app and tweak list (yours to edit)
+//!   ~/.config/cachyup/config.toml       tasks, update steps, settings, on/off per app
 //!   ~/.local/state/cachyup/state.toml   what cachyup has seen and installed
 //!   ~/.local/state/cachyup/runs/<id>/   one directory per run: output.log, run.json
 //!   ~/.cache/cachyup/info.json          package descriptions read from the sources
@@ -51,12 +50,13 @@ impl Paths {
         self.config_dir.join("config.toml")
     }
 
-    pub fn selection_file(&self) -> PathBuf {
-        self.config_dir.join("selection.toml")
+    pub fn apps_file(&self) -> PathBuf {
+        self.config_dir.join(crate::catalog::FILE_NAME)
     }
 
-    pub fn user_apps_file(&self) -> PathBuf {
-        self.config_dir.join("user-apps.toml")
+    /// `selection.toml` from before 0.2.0, folded into config.toml at launch.
+    pub fn legacy_selection_file(&self) -> PathBuf {
+        self.config_dir.join("selection.toml")
     }
 
     pub fn state_file(&self) -> PathBuf {

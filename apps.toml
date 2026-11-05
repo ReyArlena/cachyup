@@ -1,13 +1,14 @@
-# The built-in app and tweak list. Compiled into the binary.
+# cachyup's app and tweak list. On the first launch it is copied to
+# ~/.config/cachyup/apps.toml, and that copy is the one cachyup reads: edit
+# it as you like. Everything starts switched off; `A` in the app list turns
+# everything on.
 #
 # Package lists are plain names, or an inline table when an entry needs more:
-#   { name = "junction", unless_cmd = "dms" }
-#     unless_cmd   default to off when this command exists (the app list says
-#                  which package provides it)
-#     default      true/false, overrides the normal default (on)
+#   { name = "junction", default = true, unless_cmd = "dms" }
+#     default      true: on the first time it is seen (the normal default is off)
+#     unless_cmd   with default = true: stay off when this command exists
+#                  (the app list says which package provides it)
 #     description  one line; otherwise it is read from the package source
-#
-# Users add their own in ~/.config/cachyup/user-apps.toml, same layout.
 
 # Installed before everything else whenever a run does anything. Needed by
 # cachyup itself, never shown in the app list.

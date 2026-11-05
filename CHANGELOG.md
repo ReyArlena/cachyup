@@ -22,10 +22,26 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   app's optional `update` command (`claude update` for Claude Code), one step per app,
   as the user. Install scripts are never re-run.
 
+- `install.sh --apps URL|path` to start from your own apps file.
+- `A` in the app list switches everything shown on, or off again.
+
 ### Changed
 
+- The app list is now your own file: `~/.config/cachyup/apps.toml`, created from
+  cachyup's list (`apps.toml` in the repo, formerly `catalog.toml`) on the first launch,
+  comments included. Edit it freely; cachyup's built-in copy only supplies the
+  prerequisites and the "new in cachyup" notice for entries your file lacks.
+- Everything starts switched off, including on the first launch. `default = true` opts an
+  entry on.
+- `selection.toml` folded into `config.toml` as `[apps]` and `[tweaks]`, so one file holds
+  every setting. `user-apps.toml` is merged into `apps.toml`. Both old files are renamed
+  `.migrated` at the first launch.
 - AUR packages renamed for Dux Shell 2.1: `dankcalendar-bin` is now `dux-calendar-bin`,
   `dsearch-bin` is now `dux-search-bin`.
+
+### Removed
+
+- `user-apps.toml` and `selection.toml` (see above).
 
 ## [0.1.0] - 2026-10-23
 

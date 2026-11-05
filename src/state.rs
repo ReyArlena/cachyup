@@ -1,5 +1,5 @@
 //! `state.toml`: what cachyup has seen and done, as opposed to what the user
-//! chose (that is `selection.toml`). Never edited by hand.
+//! chose (that is `config.toml`). Never edited by hand.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -14,7 +14,8 @@ use crate::paths::write_file;
 pub struct State {
     /// cachyup version of the last launch.
     pub version: Option<String>,
-    /// App keys known at the last launch. Anything else is new.
+    /// Built-in app keys already announced to the user. A built-in entry
+    /// outside this set is new in cachyup.
     pub seen_apps: BTreeSet<String>,
     pub seen_tweaks: BTreeSet<String>,
     /// Apps cachyup installed, or found installed while selected, at least

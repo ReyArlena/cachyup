@@ -4,7 +4,6 @@
 
 use crate::catalog::{Catalog, Source};
 use crate::config::Config;
-use crate::selection::Selection;
 
 use super::steps;
 use super::{Ctx, Outcome};
@@ -71,7 +70,8 @@ pub const TASK_UPDATE: &str = "Full System Update";
 pub const TASK_APPS: &str = "Install Apps";
 pub const TASK_TWEAKS: &str = "Install Tweaks";
 
-pub fn build_plan(catalog: &Catalog, config: &Config, selection: &Selection, dry: bool) -> Plan {
+pub fn build_plan(catalog: &Catalog, config: &Config, dry: bool) -> Plan {
+    let selection = &config.selection;
     let mut plan = Plan {
         steps: Vec::new(),
         tasks: Vec::new(),
@@ -157,21 +157,23 @@ mod tests {
         config.tasks.update = false;
         config.tasks.apps = false;
         config.tasks.tweaks = false;
-        let plan = build_plan(&Catalog::builtin(), &config, &Selection::default(), true);
+        let plan = build_plan(&Catalog::builtin(), &config, true);
         assert!(plan.steps.is_empty());
     }
 
     #[test]
     fn plan_follows_tasks_and_selection() {
         let catalog = Catalog::builtin();
-        let mut sel = Selection::default();
-        sel.apps.insert("pacman/discord".into(), true);
-        sel.apps.insert("aur/spotify".into(), true);
-        sel.apps.insert("pacman/ark".into(), false);
-        sel.tweaks.insert("discord-skip-host-update".into(), true);
         let mut config = Config::default();
+        config.selection.apps.insert("pacman/discord".into(), true);
+        config.selection.apps.insert("aur/spotify".into(), true);
+        config.selection.apps.insert("pacman/ark".into(), false);
+        config
+            .selection
+            .tweaks
+            .insert("discord-skip-host-update".into(), true);
         config.update.insert("pacman".into(), false);
-        let plan = build_plan(&catalog, &config, &sel, true);
+        let plan = build_plan(&catalog, &config, true);
         let n = names(&plan);
         assert!(n.contains(&"Pacman packages: discord".to_string()), "{n:?}");
         assert!(n.contains(&"AUR packages: spotify".to_string()));
@@ -194,7 +196,7 @@ mod tests {
         assert!(first_prereq < first_app);
 
         config.tasks.update = false;
-        let plan = build_plan(&catalog, &config, &sel, true);
+        let plan = build_plan(&catalog, &config, true);
         let n = names(&plan);
         assert!(!n.iter().any(|s| s.starts_with("Cleanup:")));
         assert!(n.iter().any(|s| s.starts_with("Prerequisites")));
@@ -203,27 +205,31 @@ mod tests {
     #[test]
     fn installer_updates_are_opt_in_and_follow_selection() {
         let catalog = Catalog::builtin();
-        let mut sel = Selection::default();
-        sel.apps.insert("installer/claude".into(), true);
-        sel.apps.insert("installer/kiln".into(), true);
-        let config = Config::default();
-        let n = names(&build_plan(&catalog, &config, &sel, true));
+        let mut config = Config::default();
+        config
+            .selection
+            .apps
+            .insert("installer/claude".into(), true);
+        config.selection.apps.insert("installer/kiln".into(), true);
+        let n = names(&build_plan(&catalog, &config, true));
         assert!(
             !n.iter().any(|s| s.starts_with("System update: Update")),
             "{n:?}"
         );
 
-        let mut config = Config::default();
         config.update.insert("installers".into(), true);
-        let n = names(&build_plan(&catalog, &config, &sel, true));
+        let n = names(&build_plan(&catalog, &config, true));
         assert!(
             n.contains(&"System update: Update Claude Code".to_string()),
             "{n:?}"
         );
         // kiln has no update command; a deselected app is never touched.
         assert!(!n.iter().any(|s| s.contains("Update kiln")), "{n:?}");
-        sel.apps.insert("installer/claude".into(), false);
-        let n = names(&build_plan(&catalog, &config, &sel, true));
+        config
+            .selection
+            .apps
+            .insert("installer/claude".into(), false);
+        let n = names(&build_plan(&catalog, &config, true));
         assert!(!n.iter().any(|s| s.contains("Update Claude Code")), "{n:?}");
     }
 }

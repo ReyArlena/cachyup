@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::catalog::{App, Catalog};
 use crate::config::Config;
@@ -15,8 +15,8 @@ use crate::system::{Installed, has_cmd};
 
 pub struct AppState {
     pub paths: Paths,
+    /// Settings and the on/off selection (`config.selection`).
     pub config: Config,
-    pub selection: Selection,
     pub catalog: Catalog,
     pub state: State,
     pub installed: Installed,
@@ -27,15 +27,19 @@ pub struct AppState {
 
 impl AppState {
     pub fn load(paths: Paths) -> Result<Self> {
-        let config = Config::load(&paths.config_file())?;
-        let mut selection = Selection::load(&paths.selection_file())?;
+        let mut config = Config::load(&paths.config_file())?;
+        let mut notes = migrate_selection(&paths, &mut config)?;
         let saved = State::load(&paths.state_file())?;
         let first_launch = saved.is_none();
-        let catalog = Catalog::load(&paths.user_apps_file());
+        notes.extend(Catalog::ensure_file(&paths.config_dir));
+        let mut catalog = Catalog::load(&paths.apps_file());
+        notes.append(&mut catalog.warnings);
+        catalog.warnings = notes;
         let installed = Installed::probe();
         let (state, launch) = reconcile(
             &catalog,
-            &mut selection,
+            &Catalog::builtin(),
+            &mut config.selection,
             saved,
             &|app: &App| installed.app(app, &paths),
             &has_cmd,
@@ -43,18 +47,14 @@ impl AppState {
         let app = Self {
             paths,
             config,
-            selection,
             catalog,
             state,
             installed,
             launch,
             first_launch,
         };
-        app.save_selection()?;
+        app.save_config()?;
         app.save_state()?;
-        if first_launch || !app.paths.config_file().exists() {
-            app.save_config()?;
-        }
         Ok(app)
     }
 
@@ -68,8 +68,9 @@ impl AppState {
         self.config.save(&self.paths.config_file())
     }
 
+    /// The selection lives in config.toml.
     pub fn save_selection(&self) -> Result<()> {
-        self.selection.save(&self.paths.selection_file())
+        self.save_config()
     }
 
     pub fn save_state(&self) -> Result<()> {
@@ -77,13 +78,13 @@ impl AppState {
     }
 
     pub fn plan(&self, dry: bool) -> Plan {
-        build_plan(&self.catalog, &self.config, &self.selection, dry)
+        build_plan(&self.catalog, &self.config, dry)
     }
 
     /// Flip an app. A change by hand resets "managed": turning an app back on
     /// after removing it must not count as removed again at the next launch.
     pub fn set_app(&mut self, key: &str, on: bool) {
-        self.selection.apps.insert(key.to_string(), on);
+        self.config.selection.apps.insert(key.to_string(), on);
         self.state.managed.remove(key);
     }
 
@@ -92,13 +93,13 @@ impl AppState {
     /// app key it switched on, if any. An installed app is left alone: it may
     /// be off on purpose, and the tweak applies either way.
     pub fn set_tweak(&mut self, id: &str, on: bool) -> Option<String> {
-        self.selection.tweaks.insert(id.to_string(), on);
+        self.config.selection.tweaks.insert(id.to_string(), on);
         if !on {
             return None;
         }
         let key = self.catalog.tweak(id)?.app.clone()?;
         let app = self.catalog.app(&key)?;
-        if self.selection.app_on(&key) || self.is_installed(app) == Some(true) {
+        if self.config.selection.app_on(&key) || self.is_installed(app) == Some(true) {
             return None;
         }
         self.set_app(&key, true);
@@ -130,6 +131,23 @@ impl AppState {
     }
 }
 
+/// Fold a pre-0.2.0 `selection.toml` into config.toml, once. The old file
+/// is renamed so it is not read again. Returns a note for the user.
+fn migrate_selection(paths: &Paths, config: &mut Config) -> Result<Vec<String>> {
+    let legacy = paths.legacy_selection_file();
+    if !legacy.exists() {
+        return Ok(Vec::new());
+    }
+    if config.selection.apps.is_empty() && config.selection.tweaks.is_empty() {
+        config.selection = Selection::load_legacy(&legacy)?;
+    }
+    let moved = legacy.with_extension("toml.migrated");
+    std::fs::rename(&legacy, &moved).with_context(|| format!("renaming {}", legacy.display()))?;
+    Ok(vec![
+        "selection.toml moved into config.toml ([apps] and [tweaks]) and renamed to selection.toml.migrated".into(),
+    ])
+}
+
 pub fn is_root() -> bool {
     nix::unistd::Uid::effective().is_root()
 }
@@ -146,7 +164,7 @@ mod tests {
         std::fs::create_dir_all(paths.home.join("bin")).unwrap();
         std::fs::write(paths.home.join("bin/present"), "").unwrap();
         std::fs::write(
-            paths.user_apps_file(),
+            paths.apps_file(),
             r#"
 [[installer]]
 name = "missing"
@@ -182,17 +200,17 @@ set = [{ json = "~/a.json", key = "k", value = 1 }]
             app.set_tweak("t-missing", true).as_deref(),
             Some("installer/missing")
         );
-        assert!(app.selection.app_on("installer/missing"));
+        assert!(app.config.selection.app_on("installer/missing"));
 
         assert_eq!(app.set_tweak("t-present", true), None);
         assert!(
-            !app.selection.app_on("installer/present"),
+            !app.config.selection.app_on("installer/present"),
             "installed app left alone"
         );
 
         assert_eq!(app.set_tweak("t-missing", false), None);
         assert!(
-            app.selection.app_on("installer/missing"),
+            app.config.selection.app_on("installer/missing"),
             "turning off leaves the app"
         );
     }

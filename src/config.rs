@@ -1,5 +1,6 @@
-//! `config.toml`: which tasks run, which update steps run, and the numbers
-//! the cleanup uses. Missing keys fall back to defaults, so old files keep working.
+//! `config.toml`: which tasks run, which update steps run, the numbers the
+//! cleanup uses, and which apps and tweaks are on. Missing keys fall back to
+//! defaults, so old files keep working.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -8,6 +9,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::paths::write_file;
+use crate::selection::Selection;
 
 /// One toggleable step of the Full System Update task.
 pub struct UpdateStep {
@@ -108,6 +110,9 @@ pub struct Config {
     /// Update step id -> on/off. Unknown ids are kept but ignored.
     pub update: BTreeMap<String, bool>,
     pub settings: Settings,
+    /// On/off for every app and tweak (`[apps]` and `[tweaks]`).
+    #[serde(flatten)]
+    pub selection: Selection,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -163,6 +168,7 @@ impl Default for Config {
                 .map(|s| (s.id.to_string(), s.default))
                 .collect(),
             settings: Settings::default(),
+            selection: Selection::default(),
         }
     }
 }
@@ -213,8 +219,9 @@ pub const NUMBER_SETTINGS: &[NumberSetting] = &[
 ];
 
 const HEADER: &str = "\
-# cachyup settings. Change them in the app (c on a task) or here.
-# Delete a line to get its default back.
+# cachyup settings. Change them in the app or here.
+# Delete a line to get its default back. [apps] and [tweaks] hold what is
+# switched on; turning an app off never uninstalls it.
 
 ";
 
@@ -274,8 +281,12 @@ mod tests {
         c.tasks.tweaks = false;
         c.update.insert("orphans".into(), false);
         c.settings.yay_cache_keep_days = 10;
+        c.selection.apps.insert("pacman/discord".into(), true);
+        c.selection.tweaks.insert("x".into(), false);
         c.save(&path).unwrap();
         assert_eq!(Config::load(&path).unwrap(), c);
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("[apps]\n\"pacman/discord\" = true"), "{text}");
 
         std::fs::write(&path, "[update]\norphans = false\n").unwrap();
         let c = Config::load(&path).unwrap();

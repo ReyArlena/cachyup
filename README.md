@@ -19,6 +19,16 @@ This puts the `cachyup` binary in `~/.local/bin`. Run the same command again to 
 cachyup tells you at launch when a new release is out (`c` in that popup copies the
 install command). Run as your normal user, not root.
 
+To start from your own app list instead of cachyup's, pass `--apps` with a URL or a
+path. It lands in `~/.config/cachyup/apps.toml` unless that file already exists:
+
+```bash
+curl -fsSL https://reyarlena.github.io/cachyup/install.sh | sh -s -- --apps https://raw.githubusercontent.com/ReyArlena/cachyup/main/apps.toml
+```
+
+An apps file holds shell commands that run as you (`install`, `run`, `update`), so only
+use one you trust, the same as the install script itself.
+
 Remove it with `sh install.sh --uninstall`, or `--purge` to also delete settings and
 history.
 
@@ -126,24 +136,31 @@ package gets its own honest result and reason.
 
 ### Your selection
 
-Every app and tweak is on or off, saved in `~/.config/cachyup/selection.toml`. Switching an
-app off never uninstalls it.
+Every app and tweak is on or off, saved under `[apps]` and `[tweaks]` in
+`~/.config/cachyup/config.toml`. Switching an app off never uninstalls it.
 
-- **First launch:** everything is on, except entries with a condition (`unless_cmd`).
-  Junction (a link chooser) and its tweak are off when Dux Shell's `dms` command
-  is installed, because Dux Shell has its own link chooser.
-- **cachyup adds an app in an update:** a popup at launch lists the new entries. They start
-  off, shown in blue with a `new` badge for that session. `Enter` jumps to the list to
-  review them.
+- **First launch:** everything is off. `A` in the app list switches everything shown on
+  (or off again); `a` does the same for the group under the cursor. An entry with
+  `default = true` starts on, unless its `unless_cmd` command exists: Junction (a link
+  chooser) stays off when Dux Shell's `dms` command is installed, because Dux Shell has
+  its own link chooser.
+- **cachyup adds an app in an update:** a popup at launch names the entries cachyup now
+  ships that are not in your `apps.toml`, once. Add the ones you want to the file.
 - **You uninstall an app cachyup installed:** at the next launch it is switched off, with a
   popup saying so, so it is not reinstalled behind your back. Switch it on to get it back.
 - **An app is dropped from the list:** it is forgotten. If it comes back later it counts as
   new.
 
-### Adding your own
+### Your app list
 
-Create `~/.config/cachyup/user-apps.toml`. Same layout as cachyup's own
-[`catalog.toml`](catalog.toml). Everything in it is optional; a short file is fine:
+`~/.config/cachyup/apps.toml` is the list cachyup installs from. It starts as a copy of
+[cachyup's own](apps.toml) on the first launch, comments and all, and from then on it is
+yours: add, remove or reword entries as you like. The built-in list stays in the binary
+as the reference for new entries and for the prerequisites, which always apply even if
+you trim them from your file. A file that does not parse is reported at launch and the
+built-in list is used until it is fixed.
+
+The layout, with a short example:
 
 ```toml
 pacman = ["htop", "btop"]
@@ -169,11 +186,9 @@ set = [
 ]
 ```
 
-Your entries start switched on the first time they are seen. An entry that repeats one of
-cachyup's own is ignored, and a popup at launch says so. So does a name listed under two
-sources, a tweak whose `app` is not in the list, or a file that does not parse. The user
-file only adds: it cannot change or hide a built-in entry, and `prerequisites` is ignored
-in it.
+New entries start switched off. An entry listed twice is ignored, and a popup at launch
+says so. So does a name listed under two sources, or a tweak whose `app` is not in the
+list.
 
 #### Packages
 
@@ -189,8 +204,8 @@ flatpak = ["org.gnome.Chess"]
 |-----|---------|
 | `name` | Package name (`pacman`, `aur`) or application id (`flatpak`). Required. |
 | `description` | One line under the entry. Otherwise read from the package source. |
-| `default` | `true` or `false`: on or off the first time it is seen. Default on. |
-| `unless_cmd` | Off by default while this command exists (`"dms"`, `"/usr/bin/foo"`). |
+| `default` | `true`: on the first time it is seen. Everything else starts off. |
+| `unless_cmd` | With `default = true`: stay off while this command exists (`"dms"`, `"/usr/bin/foo"`). |
 
 Pacman names are checked against the repos, AUR names against the AUR, flatpak ids
 against Flathub. An unknown name shows as Unavailable and is skipped in a run.
@@ -211,7 +226,7 @@ update = "claude update"
 
 | Key | Meaning |
 |-----|---------|
-| `name` | Short id, used in the selection file as `installer/name`. Required. |
+| `name` | Short id, used in `config.toml` as `installer/name`. Required. |
 | `label` | Display name when it should differ from `name`. |
 | `description` | One line under the entry. |
 | `check` | A path (`~` allowed) or a command name on PATH. Present means installed. Required. |
@@ -255,7 +270,7 @@ run = "xdg-mime default dev.duxlabs.files.desktop inode/directory"
 
 | Key | Meaning |
 |-----|---------|
-| `id` | Unique id, used in the selection file. Required. |
+| `id` | Unique id, used in `config.toml`. Required. |
 | `name` | Shown in the list. Required. |
 | `app` | Key of the app it belongs to: `pacman/htop`, `aur/foo`, `flatpak/org.x.App`, `installer/my-tool`. Shown under that app and skipped while it is not installed. Without it the tweak stands alone. |
 | `description` | One line under the entry. |
@@ -289,15 +304,16 @@ shows them straight away next time.
 
 | Path | What |
 |------|------|
-| `~/.config/cachyup/config.toml` | Tasks, update steps, cleanup numbers |
-| `~/.config/cachyup/selection.toml` | On/off for every app and tweak |
-| `~/.config/cachyup/user-apps.toml` | Your own apps and tweaks (optional) |
+| `~/.config/cachyup/apps.toml` | The app and tweak list, yours to edit |
+| `~/.config/cachyup/config.toml` | Tasks, update steps, cleanup numbers, on/off for every app and tweak |
 | `~/.local/state/cachyup/state.toml` | What cachyup has seen and installed (not for editing) |
 | `~/.local/state/cachyup/runs/<date>/output.log` | Everything a run printed |
 | `~/.local/state/cachyup/runs/<date>/run.json` | The run's summary, rewritten after every step |
 | `~/.cache/cachyup/info.json` | Package descriptions |
 
-All three settings files are plain TOML and fine to edit by hand while cachyup is closed.
+Both are plain TOML and fine to edit by hand while cachyup is closed. Files from before
+0.2.0 (`selection.toml`, `user-apps.toml`) are folded in at the first launch and renamed
+with a `.migrated` suffix.
 
 ## Notes
 
@@ -347,18 +363,20 @@ it to the release, which is what `install.sh` downloads.
 
 ### Adding to the built-in list
 
-Edit [`catalog.toml`](catalog.toml) (compiled into the binary). A unit test fails if an
-entry is listed twice or a tweak points at an app that does not exist. Use real package
-names: groups (`gnome`) and virtual names (`jack`) show as Unavailable.
+Edit [`apps.toml`](apps.toml) (compiled into the binary), or edit your own
+`~/.config/cachyup/apps.toml` and copy it over: same file, same layout. A unit test fails
+if an entry is listed twice or a tweak points at an app that does not exist. Use real
+package names: groups (`gnome`) and virtual names (`jack`) show as Unavailable.
 
 ## Layout
 
 ```
-catalog.toml          the built-in app and tweak list
-install.sh            downloads the release binary
-src/catalog.rs        catalog + user-apps.toml parsing, duplicate detection
-src/config.rs         config.toml, the update steps and their dependencies
-src/selection.rs      selection.toml and launch-time reconciliation (new, removed)
+apps.toml             the app and tweak list, copied to the user's config on first launch
+install.sh            downloads the release binary, optionally an apps file
+src/catalog.rs        apps.toml parsing, duplicate detection, first-launch copy
+src/apps_edit.rs      layout-preserving edits to the user's apps.toml (toml_edit)
+src/config.rs         config.toml, the update steps and their dependencies, on/off selection
+src/selection.rs      launch-time reconciliation (defaults, new in cachyup, removed)
 src/state.rs          state.toml
 src/system.rs         read-only probes: installed packages, package info
 src/sudo.rs           ask once, keep the ticket alive

@@ -1,5 +1,6 @@
-//! The app and tweak catalog: the built-in `catalog.toml` (compiled in) plus
-//! the user's optional `user-apps.toml`, in the same layout.
+//! The app and tweak catalog. The user's `~/.config/cachyup/apps.toml` is
+//! the list; it starts as a copy of the built-in `apps.toml` (compiled in),
+//! which stays around as the reference for prerequisites and new entries.
 //!
 //! Every app has a key `source/name` (e.g. `pacman/discord`), used by the
 //! selection and state files. Tweaks are keyed by their `id`.
@@ -9,9 +10,14 @@ use std::fmt;
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
+
+use crate::paths::write_file;
 use serde::Deserialize;
 
-pub const BUILTIN: &str = include_str!("../catalog.toml");
+pub const BUILTIN: &str = include_str!("../apps.toml");
+
+/// Name of the user's copy, in the config directory.
+pub const FILE_NAME: &str = "apps.toml";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Source {
@@ -69,7 +75,8 @@ impl fmt::Display for Source {
     }
 }
 
-/// Where an entry came from.
+/// Which file an entry was parsed from. The built-in list must be
+/// consistent (errors); the user's file gets warnings instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Origin {
     Builtin,
@@ -205,34 +212,83 @@ pub struct Catalog {
 impl Catalog {
     /// The built-in catalog only.
     pub fn builtin() -> Self {
-        let file: CatalogFile = toml::from_str(BUILTIN).expect("built-in catalog.toml is valid");
+        let file: CatalogFile = toml::from_str(BUILTIN).expect("built-in apps.toml is valid");
         let mut catalog = Catalog::default();
         catalog
             .merge(file, Origin::Builtin)
-            .expect("built-in catalog.toml is consistent");
+            .expect("built-in apps.toml is consistent");
         catalog
     }
 
-    /// Built-in plus the user's file if it exists. Problems with the user file
-    /// never stop the app: they end up in `warnings`.
-    pub fn load(user_file: &Path) -> Self {
-        let mut catalog = Self::builtin();
-        if !user_file.exists() {
-            return catalog;
+    /// Create the user's file from the built-in list when it is missing.
+    /// An old `user-apps.toml` is merged into the new file and renamed.
+    /// Returns anything worth telling the user; never fails the launch.
+    pub fn ensure_file(dir: &Path) -> Vec<String> {
+        let mut warnings = Vec::new();
+        let file = dir.join(FILE_NAME);
+        if file.exists() {
+            return warnings;
         }
+        let legacy = dir.join("user-apps.toml");
+        let mut text = BUILTIN.to_string();
+        if legacy.exists() {
+            match std::fs::read_to_string(&legacy)
+                .map_err(anyhow::Error::from)
+                .and_then(|extra| crate::apps_edit::append(BUILTIN, &extra))
+            {
+                Ok(merged) => text = merged,
+                Err(e) => warnings.push(format!(
+                    "user-apps.toml could not be merged into {FILE_NAME}: {e:#}"
+                )),
+            }
+        }
+        if let Err(e) = write_file(&file, &text) {
+            warnings.push(format!("could not create {}: {e}", file.display()));
+            return warnings;
+        }
+        if legacy.exists() {
+            let moved = dir.join("user-apps.toml.migrated");
+            if let Err(e) = std::fs::rename(&legacy, &moved) {
+                warnings.push(format!("could not rename {FILE_NAME}: {e}"));
+            } else {
+                warnings.push(format!(
+                    "user-apps.toml merged into {FILE_NAME} and renamed to user-apps.toml.migrated"
+                ));
+            }
+        }
+        warnings
+    }
+
+    /// The user's file. Falls back to the built-in list, with a warning, when
+    /// it is missing or does not parse. Built-in prerequisites are always
+    /// included, so a trimmed file cannot break a run.
+    pub fn load(user_file: &Path) -> Self {
         let parsed = std::fs::read_to_string(user_file)
             .with_context(|| format!("reading {}", user_file.display()))
             .and_then(|text| {
                 toml::from_str::<CatalogFile>(&text)
                     .with_context(|| format!("{} is not valid", user_file.display()))
             });
-        match parsed {
+        let mut catalog = match parsed {
             Ok(file) => {
+                let mut catalog = Catalog::default();
                 if let Err(e) = catalog.merge(file, Origin::User) {
                     catalog.warnings.push(format!("{e:#}"));
                 }
+                catalog
             }
-            Err(e) => catalog.warnings.push(format!("{e:#}")),
+            Err(e) => {
+                let mut catalog = Self::builtin();
+                catalog
+                    .warnings
+                    .push(format!("{e:#}. Using the built-in list for now."));
+                catalog
+            }
+        };
+        for p in Self::builtin().prerequisites {
+            if !catalog.prerequisites.contains(&p) {
+                catalog.prerequisites.push(p);
+            }
         }
         catalog
     }
@@ -256,17 +312,11 @@ impl Catalog {
         self.apps.iter().filter(move |a| a.source == source)
     }
 
-    /// Add a parsed file. Built-in duplicates are a bug (error); user entries
-    /// that repeat an existing one are skipped with a warning.
+    /// Add a parsed file. Built-in duplicates are a bug (error); duplicates
+    /// in the user's file are skipped with a warning.
     fn merge(&mut self, file: CatalogFile, origin: Origin) -> Result<()> {
         let user = origin == Origin::User;
-        if user && !file.prerequisites.is_empty() {
-            self.warnings
-                .push("user-apps.toml: `prerequisites` is ignored; use `pacman` instead".into());
-        }
-        if !user {
-            self.prerequisites = file.prerequisites;
-        }
+        self.prerequisites = file.prerequisites;
 
         let mut keys: HashSet<String> = self.apps.iter().map(App::key).collect();
         let mut incoming: Vec<App> = Vec::new();
@@ -300,7 +350,7 @@ impl Catalog {
             if app.name.trim().is_empty() || app.name.contains(char::is_whitespace) {
                 let msg = format!("{}: invalid name {:?}", app.source, app.name);
                 if user {
-                    self.warnings.push(format!("user-apps.toml: {msg}"));
+                    self.warnings.push(format!("{FILE_NAME}: {msg}"));
                     continue;
                 }
                 bail!(msg);
@@ -308,12 +358,8 @@ impl Catalog {
             let key = app.key();
             if !keys.insert(key.clone()) {
                 if user {
-                    let already = match self.app(&key).map(|a| a.origin) {
-                        Some(Origin::Builtin) => "already in cachyup's list",
-                        _ => "listed twice",
-                    };
                     self.warnings
-                        .push(format!("user-apps.toml: {key} is {already}, ignored"));
+                        .push(format!("{FILE_NAME}: {key} is listed twice, ignored"));
                     continue;
                 }
                 bail!("{key} is listed twice");
@@ -326,7 +372,7 @@ impl Catalog {
                     .find(|a| a.name == app.name && a.source != app.source)
             {
                 self.warnings.push(format!(
-                    "user-apps.toml: {key} is also listed as {}",
+                    "{FILE_NAME}: {key} is also listed as {}",
                     other.key()
                 ));
             }
@@ -339,7 +385,7 @@ impl Catalog {
             let tweak = match def.into_tweak(origin) {
                 Ok(t) => t,
                 Err(e) if user => {
-                    self.warnings.push(format!("user-apps.toml: {e:#}"));
+                    self.warnings.push(format!("{FILE_NAME}: {e:#}"));
                     continue;
                 }
                 Err(e) => return Err(e),
@@ -349,16 +395,15 @@ impl Catalog {
             {
                 let msg = format!("tweak {id}: app {app} is not in the list");
                 if user {
-                    self.warnings.push(format!("user-apps.toml: {msg}"));
+                    self.warnings.push(format!("{FILE_NAME}: {msg}"));
                     continue;
                 }
                 bail!(msg);
             }
             if !ids.insert(id.clone()) {
                 if user {
-                    self.warnings.push(format!(
-                        "user-apps.toml: tweak {id} already exists, ignored"
-                    ));
+                    self.warnings
+                        .push(format!("{FILE_NAME}: tweak {id} is listed twice, ignored"));
                     continue;
                 }
                 bail!("tweak {id} is listed twice");
@@ -598,14 +643,14 @@ mod tests {
     }
 
     #[test]
-    fn user_file_adds_and_flags_duplicates() {
+    fn user_file_is_the_list_and_flags_duplicates() {
         let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("user-apps.toml");
+        let file = dir.path().join(FILE_NAME);
         std::fs::write(
             &file,
             r#"
-pacman = ["htop", "discord", "htop"]
-aur = ["obsidian"]
+pacman = ["htop", "htop"]
+aur = ["htop"]
 flatpak = [{ name = "com.example.App", description = "mine" }]
 
 [[tweak]]
@@ -613,11 +658,25 @@ id = "htop-tree"
 app = "pacman/htop"
 name = "Tree view"
 set = [{ ini = "~/.config/htop/htoprc", section = "x", key = "tree_view", value = 1 }]
+
+[[tweak]]
+id = "orphan"
+app = "pacman/nothing"
+name = "No such app"
+set = [{ ini = "~/x", section = "x", key = "k", value = 1 }]
 "#,
         )
         .unwrap();
         let c = Catalog::load(&file);
         assert_eq!(c.app("pacman/htop").unwrap().origin, Origin::User);
+        assert!(
+            c.app("pacman/discord").is_none(),
+            "built-in apps are not added"
+        );
+        assert!(
+            c.prerequisites.contains(&"yay".to_string()),
+            "built-in prerequisites always apply"
+        );
         assert_eq!(
             c.app("flatpak/com.example.App")
                 .unwrap()
@@ -625,17 +684,12 @@ set = [{ ini = "~/.config/htop/htoprc", section = "x", key = "tree_view", value 
                 .as_deref(),
             Some("mine")
         );
-        assert_eq!(c.apps.iter().filter(|a| a.name == "htop").count(), 1);
+        assert_eq!(c.apps.iter().filter(|a| a.name == "htop").count(), 2);
         let w = c.warnings.join("\n");
-        assert!(
-            w.contains("pacman/discord is already in cachyup's list"),
-            "{w}"
-        );
         assert!(w.contains("pacman/htop is listed twice"), "{w}");
-        assert!(
-            w.contains("aur/obsidian is also listed as pacman/obsidian"),
-            "{w}"
-        );
+        assert!(w.contains("aur/htop is also listed as pacman/htop"), "{w}");
+        assert!(w.contains("app pacman/nothing is not in the list"), "{w}");
+        assert!(c.tweak("orphan").is_none());
         match &c.tweak("htop-tree").unwrap().sets[0] {
             SetOp::Ini { value, .. } => assert_eq!(value, "1"),
             other => panic!("{other:?}"),
@@ -643,11 +697,42 @@ set = [{ ini = "~/.config/htop/htoprc", section = "x", key = "tree_view", value 
     }
 
     #[test]
-    fn broken_user_file_is_a_warning_not_an_error() {
+    fn ensure_file_copies_the_builtin_and_migrates_user_apps() {
         let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("user-apps.toml");
+        assert!(Catalog::ensure_file(dir.path()).is_empty());
+        let file = dir.path().join(FILE_NAME);
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), BUILTIN);
+        // A second call leaves the file alone.
+        std::fs::write(&file, "pacman = [\"htop\"]\n").unwrap();
+        assert!(Catalog::ensure_file(dir.path()).is_empty());
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "pacman = [\"htop\"]\n"
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let legacy = dir.path().join("user-apps.toml");
+        std::fs::write(&legacy, "pacman = [\"htop\"]\n").unwrap();
+        let w = Catalog::ensure_file(dir.path());
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(!legacy.exists());
+        assert!(dir.path().join("user-apps.toml.migrated").exists());
+        let c = Catalog::load(&dir.path().join(FILE_NAME));
+        assert!(c.app("pacman/htop").is_some());
+        assert!(c.app("pacman/discord").is_some());
+        assert!(c.warnings.is_empty(), "{:?}", c.warnings);
+    }
+
+    #[test]
+    fn broken_or_missing_user_file_falls_back_to_builtin() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(FILE_NAME);
         std::fs::write(&file, "pacman = [1, 2").unwrap();
         let c = Catalog::load(&file);
+        assert!(c.app("pacman/discord").is_some());
+        assert_eq!(c.warnings.len(), 1);
+        assert!(c.warnings[0].contains("Using the built-in list"));
+        let c = Catalog::load(&dir.path().join("missing.toml"));
         assert!(c.app("pacman/discord").is_some());
         assert_eq!(c.warnings.len(), 1);
     }
