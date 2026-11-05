@@ -139,7 +139,8 @@ pub fn preflight(s: &mut Vec<Step>, dry: bool) {
 
 // --- system update ---
 
-pub fn system_update(s: &mut Vec<Step>, config: &Config) {
+/// `installers`: the selected installer apps, for the "Installer updates" step.
+pub fn system_update(s: &mut Vec<Step>, config: &Config, installers: Vec<App>) {
     let g = GROUP_UPDATE;
     if config.step_enabled("rate_mirrors") {
         s.push(Step::new(g, "Rate mirrors", |cx| {
@@ -196,6 +197,22 @@ pub fn system_update(s: &mut Vec<Step>, config: &Config) {
                 &[Cmd::new("flatpak", &["update", "-y", "--noninteractive"])],
             )
         }));
+    }
+    if config.step_enabled("installers") {
+        // One step per app with an `update` command, as the user, never sudo.
+        for app in installers {
+            let Some(update) = app.installer.as_ref().and_then(|i| i.update.clone()) else {
+                continue;
+            };
+            let label = format!("Update {}", app.display_name());
+            s.push(Step::new(g, label, move |cx| {
+                let installer = app.installer.as_ref().expect("installer app");
+                if !installer_present(&installer.check, &cx.paths) {
+                    return Outcome::skipped("not installed");
+                }
+                act(cx, &[Cmd::new("bash", &["-c", &update])])
+            }));
+        }
     }
     // checkrebuild runs ldd over every AUR package and takes minutes. Start it
     // now; the post-update checks collect the result.

@@ -16,6 +16,8 @@ pub struct UpdateStep {
     pub help: &'static str,
     /// Another step this one cannot run without.
     pub needs: Option<&'static str>,
+    /// On or off in a fresh config and when the key is missing.
+    pub default: bool,
 }
 
 /// Display order of the update options, and their defaults (all on).
@@ -25,60 +27,77 @@ pub const UPDATE_STEPS: &[UpdateStep] = &[
         label: "Rate mirrors",
         help: "cachyos-rate-mirrors, at most once per cooldown period",
         needs: None,
+        default: true,
     },
     UpdateStep {
         id: "pacman",
         label: "pacman -Syu",
         help: "Full upgrade of repo packages",
         needs: None,
+        default: true,
     },
     UpdateStep {
         id: "keyrings",
         label: "Keyrings",
         help: "Refresh archlinux-keyring and cachyos-keyring before the upgrade, so signatures verify on a machine that has not updated in a while",
         needs: Some("pacman"),
+        default: true,
     },
     UpdateStep {
         id: "aur",
         label: "yay -Sua",
         help: "Upgrade AUR packages",
         needs: None,
+        default: true,
     },
     UpdateStep {
         id: "flatpak",
         label: "flatpak update",
         help: "Upgrade flatpaks and runtimes",
         needs: None,
+        default: true,
+    },
+    UpdateStep {
+        id: "installers",
+        label: "Installer updates",
+        help: "Run the update command of each installed app that has one (user-level tools installed by script). Off unless you turn it on",
+        needs: None,
+        default: false,
     },
     UpdateStep {
         id: "orphans",
         label: "Remove orphans",
         help: "pacman -Rns packages nothing depends on any more",
         needs: None,
+        default: true,
     },
     UpdateStep {
         id: "package_cache",
         label: "Prune package cache",
         help: "paccache: keep N versions of installed packages, none of uninstalled ones",
         needs: None,
+        default: true,
     },
     UpdateStep {
         id: "yay_cache",
         label: "Prune yay build cache",
         help: "Remove AUR build dirs untouched for N days, and broken clones",
         needs: None,
+        default: true,
     },
     UpdateStep {
         id: "flatpak_unused",
         label: "Remove unused flatpak runtimes",
         help: "flatpak uninstall --unused",
         needs: None,
+        default: true,
     },
     UpdateStep {
         id: "mirrorlist_pacnew",
         label: "Drop rated mirrorlist .pacnew",
         help: "A .pacnew for a mirrorlist that cachyos-rate-mirrors generates is just the stock list; nothing to merge",
         needs: None,
+        default: true,
     },
 ];
 
@@ -141,7 +160,7 @@ impl Default for Config {
             tasks: Tasks::default(),
             update: UPDATE_STEPS
                 .iter()
-                .map(|s| (s.id.to_string(), true))
+                .map(|s| (s.id.to_string(), s.default))
                 .collect(),
             settings: Settings::default(),
         }
@@ -210,7 +229,10 @@ impl Config {
             toml::from_str(&text).with_context(|| format!("{} is not valid", path.display()))?;
         // Steps added in a newer version start with their default.
         for step in UPDATE_STEPS {
-            config.update.entry(step.id.to_string()).or_insert(true);
+            config
+                .update
+                .entry(step.id.to_string())
+                .or_insert(step.default);
         }
         Ok(config)
     }
@@ -223,7 +245,12 @@ impl Config {
 
     /// Whether an update step is set to on (ignoring dependencies).
     pub fn step_on(&self, id: &str) -> bool {
-        self.update.get(id).copied().unwrap_or(true)
+        self.update.get(id).copied().unwrap_or_else(|| {
+            UPDATE_STEPS
+                .iter()
+                .find(|s| s.id == id)
+                .is_some_and(|s| s.default)
+        })
     }
 
     /// Whether an update step will actually run: on, and whatever it needs is on.
@@ -254,6 +281,7 @@ mod tests {
         let c = Config::load(&path).unwrap();
         assert!(!c.step_on("orphans"));
         assert!(c.step_on("pacman"));
+        assert!(!c.step_on("installers"), "installer updates are opt-in");
         assert!(c.tasks.update);
     }
 

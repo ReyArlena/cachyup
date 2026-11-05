@@ -108,7 +108,7 @@ Only what is switched on, in this order:
 | Group | Steps |
 |-------|-------|
 | Preflight | Running on CachyOS, internet, sudo, pacman not already running, `~/.local/bin` on PATH. A failure stops the run. |
-| System update | Rate mirrors (skipped within the cooldown), keyrings, `pacman -Syu`, `yay -Sua`, `flatpak update`. |
+| System update | Rate mirrors (skipped within the cooldown), keyrings, `pacman -Syu`, `yay -Sua`, `flatpak update`, installer updates (off by default: each selected installer app's `update` command, one step per app). |
 | Prerequisites | Packages cachyup needs (`yay`, `base-devel`, `pacman-contrib`, ...). Always installed. |
 | Pacman / AUR / Flatpaks / Installers | Each selected app on its own: checked, installed, checked again. |
 | Tweaks | Each selected tweak, skipped while its app is not installed. |
@@ -206,6 +206,7 @@ label = "Claude Code"
 description = "Anthropic's coding agent (~/.local/bin/claude)"
 check = "~/.local/bin/claude"
 install = "curl -fsSL https://claude.ai/install.sh | bash"
+update = "claude update"
 ```
 
 | Key | Meaning |
@@ -215,9 +216,12 @@ install = "curl -fsSL https://claude.ai/install.sh | bash"
 | `description` | One line under the entry. |
 | `check` | A path (`~` allowed) or a command name on PATH. Present means installed. Required. |
 | `install` | Shell command run with `bash -c` as you, only while `check` fails. Required. |
+| `update` | Shell command that updates it in place (`claude update`, `rustup update`). Run by the Installer updates step of a full system update, which is off until you switch it on in the update options. Only while `check` passes and the app is selected. Without it the app is never updated by cachyup. |
 | `default`, `unless_cmd` | As for packages. |
 
-Installers never get sudo. A script that needs it fails rather than prompts.
+Installers never get sudo. A script that needs it fails rather than prompts. Re-running
+`install` is not used for updates: install scripts download whatever is current and cannot
+say whether anything changed, so an `update` command is the only way in.
 
 #### Tweaks
 

@@ -98,6 +98,8 @@ pub struct Installer {
     pub check: String,
     /// Run with `bash -c`, as the user.
     pub install: String,
+    /// Optional update command, run by the "Installer updates" step.
+    pub update: Option<String>,
 }
 
 impl App {
@@ -288,6 +290,7 @@ impl Catalog {
                 installer: Some(Installer {
                     check: def.check,
                     install: def.install,
+                    update: def.update.filter(|u| !u.trim().is_empty()),
                 }),
                 origin,
             });
@@ -428,6 +431,7 @@ struct InstallerDef {
     description: Option<String>,
     check: String,
     install: String,
+    update: Option<String>,
     unless_cmd: Option<String>,
     default: Option<bool>,
 }
@@ -530,9 +534,11 @@ mod tests {
         assert!(c.app("pacman/discord").is_some());
         assert!(c.app("aur/spotify").is_some());
         assert!(c.app("flatpak/org.inkscape.Inkscape").is_some());
+        let claude = c.app("installer/claude").unwrap();
+        assert_eq!(claude.display_name(), "Claude Code");
         assert_eq!(
-            c.app("installer/claude").unwrap().display_name(),
-            "Claude Code"
+            claude.installer.as_ref().unwrap().update.as_deref(),
+            Some("claude update")
         );
         assert!(c.prerequisites.contains(&"yay".to_string()));
         let junction = c.app("pacman/junction").unwrap();

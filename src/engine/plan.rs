@@ -94,7 +94,12 @@ pub fn build_plan(catalog: &Catalog, config: &Config, selection: &Selection, dry
     steps::preflight(s, dry);
 
     if tasks.update {
-        steps::system_update(s, config);
+        let installers = catalog
+            .apps_from(Source::Installer)
+            .filter(|a| selection.app_on(&a.key()))
+            .cloned()
+            .collect();
+        steps::system_update(s, config, installers);
     }
 
     steps::prerequisites(s, &catalog.prerequisites);
@@ -193,5 +198,32 @@ mod tests {
         let n = names(&plan);
         assert!(!n.iter().any(|s| s.starts_with("Cleanup:")));
         assert!(n.iter().any(|s| s.starts_with("Prerequisites")));
+    }
+
+    #[test]
+    fn installer_updates_are_opt_in_and_follow_selection() {
+        let catalog = Catalog::builtin();
+        let mut sel = Selection::default();
+        sel.apps.insert("installer/claude".into(), true);
+        sel.apps.insert("installer/kiln".into(), true);
+        let config = Config::default();
+        let n = names(&build_plan(&catalog, &config, &sel, true));
+        assert!(
+            !n.iter().any(|s| s.starts_with("System update: Update")),
+            "{n:?}"
+        );
+
+        let mut config = Config::default();
+        config.update.insert("installers".into(), true);
+        let n = names(&build_plan(&catalog, &config, &sel, true));
+        assert!(
+            n.contains(&"System update: Update Claude Code".to_string()),
+            "{n:?}"
+        );
+        // kiln has no update command; a deselected app is never touched.
+        assert!(!n.iter().any(|s| s.contains("Update kiln")), "{n:?}");
+        sel.apps.insert("installer/claude".into(), false);
+        let n = names(&build_plan(&catalog, &config, &sel, true));
+        assert!(!n.iter().any(|s| s.contains("Update Claude Code")), "{n:?}");
     }
 }

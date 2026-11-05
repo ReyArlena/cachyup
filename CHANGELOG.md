@@ -17,6 +17,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   means it is done. For settings no file write reaches (`xdg-mime`, `gsettings`,
   `systemctl --user`). Runs after `installs` and `set`, never with sudo.
 - README reference for every key in `user-apps.toml`.
+- Installer updates: an update step, off by default, that runs each selected installer
+  app's optional `update` command (`claude update` for Claude Code), one step per app,
+  as the user. Install scripts are never re-run.
 
 ### Changed
 

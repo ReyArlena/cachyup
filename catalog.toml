@@ -171,12 +171,15 @@ flatpak = [
 # Apps with their own install script, run as your user with bash.
 #   check    a command on PATH or a path (~ allowed); present = installed
 #   install  shell command run with `bash -c`
+#   update   optional: shell command the "Installer updates" step runs (off
+#            by default in the update options) while the app is present
 [[installer]]
 name = "claude"
 label = "Claude Code"
 description = "Anthropic's coding agent for the terminal (native installer, ~/.local/bin/claude)"
 check = "~/.local/bin/claude"
 install = "curl -fsSL https://claude.ai/install.sh | bash"
+update = "claude update"
 
 [[installer]]
 name = "kiln"
