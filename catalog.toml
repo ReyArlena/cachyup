@@ -129,10 +129,10 @@ pacman = [
 # AUR packages, installed with yay.
 aur = [
     "amethyst-mod-manager",
-    "dankcalendar-bin",
     "discord-ptb",
-    "dsearch-bin",
+    "dux-calendar-bin",
     "dux-files-git",
+    "dux-search-bin",
     "figma-linux-next-bin",
     "google-chrome",
     "herdr-bin",

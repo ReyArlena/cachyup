@@ -14,6 +14,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shares) and setting it as the default file manager.
 - Photocraft (AUR).
 
+### Changed
+
+- AUR packages renamed for Dux Shell 2.1: `dankcalendar-bin` is now `dux-calendar-bin`,
+  `dsearch-bin` is now `dux-search-bin`.
+
 ## [0.1.0] - 2026-10-23
 
 The bash script rewritten as a Rust terminal UI.
