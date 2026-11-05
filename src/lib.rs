@@ -5,6 +5,7 @@ pub mod apps_edit;
 pub mod catalog;
 pub mod cli;
 pub mod config;
+pub mod discover;
 pub mod engine;
 pub mod paths;
 pub mod selection;

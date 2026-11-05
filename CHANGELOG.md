@@ -30,6 +30,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The app list says "Installed, will update" when the full system update as configured
   would upgrade that app: the step for its source on, and for installers the Installer
   updates step, an `update` command and the app selected.
+- Settings in the task sidebar: edit the app list in your editor, add an app by name, or
+  review what could be added. Two reviews: apps installed on this machine that the list
+  lacks (explicitly installed packages and flatpak apps; kernels, drivers, firmware and
+  base-system packages set aside behind `s`), and entries new in cachyup. Tick, then `w`
+  merges them into `apps.toml` with its layout kept (previous copy in `apps.toml.bak`)
+  and switches them on; `Esc` discards. Reviewed entries are not offered again. A launch
+  popup counts what is waiting.
 - The help popup (`?`) names your files; `e` there opens `apps.toml` in `$VISUAL`,
   `$EDITOR` or `xdg-open`, and the list is re-read afterwards.
 
@@ -50,6 +57,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Removed
 
 - `user-apps.toml` and `selection.toml` (see above).
+- The blue `new` badge: entries now enter your list only through a review or by hand, so
+  there is nothing to badge.
 
 ## [0.1.0] - 2026-10-23
 

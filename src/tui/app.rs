@@ -20,6 +20,7 @@ use super::Effect;
 use super::history::HistoryScreen;
 use super::input::{Action, Hit, HitMap, map_event};
 use super::main_screen::MainScreen;
+use super::review::{ReviewKind, ReviewResult, ReviewScreen};
 use super::run_screen::RunScreen;
 use super::theme;
 use super::widgets::{Button, Modal, draw_help, draw_key_hints};
@@ -41,6 +42,7 @@ enum Screen {
     Main,
     Run,
     History,
+    Review,
 }
 
 pub struct App {
@@ -51,6 +53,7 @@ pub struct App {
     main: MainScreen,
     run_screen: RunScreen,
     history: HistoryScreen,
+    review: Option<ReviewScreen>,
     modal: Option<Modal>,
     startup: VecDeque<Modal>,
     help: bool,
@@ -95,6 +98,7 @@ impl App {
             main,
             run_screen: RunScreen::empty(),
             history: HistoryScreen::new(),
+            review: None,
             modal: startup.pop_front(),
             startup,
             help: false,
@@ -165,6 +169,71 @@ impl App {
     /// A short message in the corner, from outside the event loop.
     pub fn notify(&mut self, text: &str) {
         self.toast(text);
+    }
+
+    /// `w` on the review screen: merge the ticked entries into apps.toml,
+    /// remember what was shown, re-read everything, switch the added on.
+    fn save_review(&mut self, result: &ReviewResult) -> Result<()> {
+        match result.kind {
+            ReviewKind::Installed => {
+                let snippet = list_snippet(&result.add);
+                self.state.merge_into_apps(&snippet, |_| true)?;
+                self.state
+                    .state
+                    .reviewed
+                    .extend(result.seen.iter().cloned());
+            }
+            ReviewKind::Builtin => {
+                let add: std::collections::HashSet<&str> =
+                    result.add.iter().map(String::as_str).collect();
+                self.state
+                    .merge_into_apps(crate::catalog::BUILTIN, |k| add.contains(k))?;
+                self.state.state.dismissed.extend(
+                    result
+                        .seen
+                        .iter()
+                        .filter(|k| !add.contains(k.as_str()))
+                        .cloned(),
+                );
+            }
+        }
+        self.state.save_state()?;
+        self.reload_and_switch_on(&result.add)
+    }
+
+    /// "Add an app by name": one package, appended and switched on.
+    fn add_app(&mut self, spec: &str) -> Result<()> {
+        let package = crate::catalog::Package::parse(spec)?;
+        let key = format!("{}/{}", package.source.id(), package.name);
+        if self.state.catalog.app(&key).is_some() {
+            anyhow::bail!("{key} is already in the list");
+        }
+        self.state
+            .merge_into_apps(&list_snippet(std::slice::from_ref(&key)), |_| true)?;
+        self.reload_and_switch_on(std::slice::from_ref(&key))?;
+        self.toast(&format!("added {key}, switched on"));
+        Ok(())
+    }
+
+    /// Re-read apps.toml and everything else, then switch the given app
+    /// keys on (a reload gives new entries their default, which is off).
+    fn reload_and_switch_on(&mut self, keys: &[String]) -> Result<()> {
+        let fresh = AppState::load(self.state.paths.clone())?;
+        self.reload(fresh);
+        for key in keys {
+            if let Some(id) = key.strip_prefix("tweak/") {
+                self.state
+                    .config
+                    .selection
+                    .tweaks
+                    .insert(id.to_string(), true);
+            } else if self.state.catalog.app(key).is_some() {
+                self.state.set_app(key, true);
+            }
+        }
+        self.state.save_config()?;
+        self.main.refresh(&self.state);
+        Ok(())
     }
 
     /// Back from the sudo prompt.
@@ -282,6 +351,13 @@ impl App {
                 self.main.filter_key(*key, &self.state);
                 return;
             }
+            if self.screen == Screen::Review
+                && let Some(review) = &mut self.review
+                && review.is_filtering()
+            {
+                review.filter_key(*key);
+                return;
+            }
         }
         if self.modal.is_some() || self.help {
             return;
@@ -324,6 +400,15 @@ impl App {
                     self.history.handle(action, &self.hits)
                 }
             }
+            Screen::Review => {
+                if action == Action::Quit {
+                    vec![Effect::Quit]
+                } else if let Some(review) = &mut self.review {
+                    review.handle(action, &self.hits)
+                } else {
+                    vec![Effect::CloseReview]
+                }
+            }
         };
         self.apply(effects);
     }
@@ -344,9 +429,19 @@ impl App {
                     self.run_screen.stopping = true;
                 }
             }
-            "review-new" => {
+            "open-settings" => {
                 self.screen = Screen::Main;
-                self.main.review_new(&self.state);
+                self.main.open_settings(&self.state);
+            }
+            "discard-review" => {
+                self.review = None;
+                self.screen = Screen::Main;
+            }
+            "add-app" => {
+                let spec = value.unwrap_or_default();
+                if let Err(e) = self.add_app(spec.trim()) {
+                    self.toast(&format!("not added: {e:#}"));
+                }
             }
             "open-release" => open_url(RELEASES_URL),
             "delete-run" => {
@@ -415,6 +510,33 @@ impl App {
                     self.screen = Screen::History;
                 }
                 Effect::CloseHistory => self.screen = self.history_from,
+                Effect::EditApps => {
+                    if self.run.is_some() {
+                        self.toast("wait for the run to finish before editing");
+                    } else {
+                        self.exit = Some(Exit::Edit);
+                    }
+                }
+                Effect::Review(kind) => {
+                    self.review = Some(ReviewScreen::new(kind, &self.state));
+                    self.screen = Screen::Review;
+                }
+                Effect::CloseReview => {
+                    self.review = None;
+                    self.screen = Screen::Main;
+                }
+                Effect::SaveReview(result) => {
+                    self.review = None;
+                    self.screen = Screen::Main;
+                    match self.save_review(&result) {
+                        Ok(()) => self.toast(&format!(
+                            "added {} to apps.toml, {} reviewed",
+                            result.add.len(),
+                            result.seen.len()
+                        )),
+                        Err(e) => self.toast(&format!("could not save: {e:#}")),
+                    }
+                }
                 Effect::Quit => self.exit = Some(Exit::Quit),
             }
         }
@@ -614,6 +736,11 @@ impl App {
                 .draw(frame, body, &self.state, &self.info, &mut self.hits),
             Screen::Run => self.run_screen.draw(frame, body, &mut self.hits),
             Screen::History => self.history.draw(frame, body, &mut self.hits),
+            Screen::Review => {
+                if let Some(review) = &mut self.review {
+                    review.draw(frame, body, &mut self.hits);
+                }
+            }
         }
         let keys = self.key_hints();
         draw_key_hints(frame, hints, &keys, &mut self.hits);
@@ -650,6 +777,11 @@ impl App {
             Screen::Main => self.main.key_hints(),
             Screen::Run => self.run_screen.key_hints(),
             Screen::History => self.history.key_hints(),
+            Screen::Review => self
+                .review
+                .as_ref()
+                .map(ReviewScreen::key_hints)
+                .unwrap_or_default(),
         }
     }
 
@@ -697,7 +829,6 @@ fn startup_modals(state: &AppState) -> Vec<Modal> {
             format!("{} ({})", a.display_name(), a.source)
         })
     };
-    let builtin = crate::catalog::Catalog::builtin();
     if !state.launch.removed.is_empty() {
         let mut text = String::from(
             "These apps were uninstalled since cachyup installed them,\nso they have been switched off in your app list:\n\n",
@@ -708,23 +839,43 @@ fn startup_modals(state: &AppState) -> Vec<Modal> {
         text.push_str("\nSwitch one back on to reinstall it.");
         out.push(Modal::message("Apps removed", &text));
     }
-    let new_count = state.launch.new_apps.len() + state.launch.new_tweaks.len();
-    if new_count > 0 {
-        let mut text =
-            String::from("cachyup was updated and has entries that are not in your apps.toml:\n\n");
-        for key in &state.launch.new_apps {
-            let shown = builtin.app(key).map_or(key.clone(), |a| {
-                format!("{} ({})", a.display_name(), a.source)
-            });
-            text.push_str(&format!("  • {shown}\n"));
+    let installed = state
+        .installed_candidates()
+        .iter()
+        .filter(|c| c.hidden.is_none())
+        .count();
+    let builtin = state.builtin_candidates().len();
+    if installed + builtin > 0 {
+        let mut parts = Vec::new();
+        if installed > 0 {
+            parts.push(format!(
+                "{installed} app{} installed on this machine since your last review",
+                if installed == 1 { "" } else { "s" }
+            ));
         }
-        for id in &state.launch.new_tweaks {
-            if let Some(t) = builtin.tweak(id) {
-                text.push_str(&format!("  • tweak: {}\n", t.name));
-            }
+        if builtin > 0 {
+            parts.push(format!(
+                "{builtin} entr{} new in cachyup",
+                if builtin == 1 { "y" } else { "ies" }
+            ));
         }
-        text.push_str("\nAdd the ones you want to ~/.config/cachyup/apps.toml.");
-        out.push(Modal::message("New in cachyup", &text));
+        let text = format!(
+            "Not in your app list yet:\n\n  • {}\n\nReview them under Settings and tick what to add.",
+            parts.join("\n  • ")
+        );
+        out.push(Modal::new(
+            "To review",
+            Modal::text(&text),
+            vec![
+                Button::new(
+                    &[KeyCode::Enter, KeyCode::Char('y')],
+                    "Enter",
+                    "open Settings",
+                    Some("open-settings"),
+                ),
+                Button::new(&[KeyCode::Esc, KeyCode::Char('n')], "Esc", "later", None),
+            ],
+        ));
     }
     out
 }
@@ -841,6 +992,20 @@ fn spawn_info_fetch(state: &AppState) -> Receiver<InfoMap> {
     rx
 }
 
+/// `pacman = [...]`, `aur = [...]`, `flatpak = [...]` for the given keys,
+/// the text the merge code appends from.
+fn list_snippet(keys: &[String]) -> String {
+    let mut lists: std::collections::BTreeMap<&str, Vec<String>> = Default::default();
+    for key in keys {
+        if let Some((source, name)) = key.split_once('/')
+            && matches!(source, "pacman" | "aur" | "flatpak")
+        {
+            lists.entry(source).or_default().push(name.to_string());
+        }
+    }
+    toml::to_string(&lists).unwrap_or_default()
+}
+
 fn open_url(url: &str) {
     let _ = std::process::Command::new("xdg-open")
         .arg(url)
@@ -874,6 +1039,7 @@ impl App {
             Screen::Main => "main",
             Screen::Run => "run",
             Screen::History => "history",
+            Screen::Review => "review",
         }
     }
 }

@@ -15,6 +15,7 @@ mod app;
 mod history;
 mod input;
 mod main_screen;
+mod review;
 mod run_screen;
 mod theme;
 mod widgets;
@@ -48,6 +49,13 @@ pub enum Effect {
     CloseRun,
     History,
     CloseHistory,
+    /// Open apps.toml in the editor (leaves the TUI, reloads after).
+    EditApps,
+    /// Open the review screen.
+    Review(review::ReviewKind),
+    CloseReview,
+    /// `w` on the review screen: merge and remember.
+    SaveReview(review::ReviewResult),
     Quit,
 }
 

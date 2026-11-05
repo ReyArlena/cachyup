@@ -7,13 +7,28 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
-fn sandbox() -> (tempfile::TempDir, AppState) {
+/// A sandbox as a fresh install sees it: whatever this machine has
+/// installed is up for review, so the "To review" popup opens first.
+fn sandbox_with_review() -> (tempfile::TempDir, AppState) {
     let dir = tempfile::tempdir().expect("temp dir");
     // No network calls to GitHub from tests.
     let config = dir.path().join("config/config.toml");
     std::fs::create_dir_all(config.parent().unwrap()).unwrap();
     std::fs::write(&config, "[settings]\nupdate_check = false\n").unwrap();
     let state = AppState::sandboxed(dir.path()).expect("sandboxed state");
+    (dir, state)
+}
+
+/// The same with everything installed already reviewed, so no popup gets
+/// in the way of the keys a test sends.
+fn sandbox() -> (tempfile::TempDir, AppState) {
+    let (dir, mut state) = sandbox_with_review();
+    state.state.reviewed = state
+        .installed_candidates()
+        .iter()
+        .map(|c| c.key())
+        .collect();
+    state.save_state().unwrap();
     (dir, state)
 }
 
@@ -186,4 +201,62 @@ fn help_names_the_apps_file_and_the_edit_key() {
     assert!(text.contains("Your files"), "{text}");
     assert!(text.contains("apps.toml"), "{text}");
     assert!(text.contains("edit the app list"), "{text}");
+}
+
+#[test]
+fn settings_pane_and_review_screen_render() {
+    let (_dir, state) = sandbox_with_review();
+    let mut app = App::new(state, false, false);
+    let text = render(&mut app, 120, 40);
+    if text.contains("To review") {
+        app.key_for_test(key(KeyCode::Esc));
+    }
+    // Down to Settings and into it.
+    for _ in 0..3 {
+        app.key_for_test(key(KeyCode::Down));
+    }
+    app.key_for_test(key(KeyCode::Char('c')));
+    let text = render(&mut app, 120, 40);
+    assert!(text.contains("Edit the app list in your editor"), "{text}");
+    assert!(
+        text.contains("Review apps installed on this machine"),
+        "{text}"
+    );
+
+    // Third row: the installed review. Whatever this machine has, the
+    // screen must open and close cleanly.
+    app.key_for_test(key(KeyCode::Down));
+    app.key_for_test(key(KeyCode::Down));
+    app.key_for_test(key(KeyCode::Enter));
+    assert_eq!(app.screen_name_for_test(), "review");
+    let text = render(&mut app, 120, 40);
+    assert!(text.contains("Review: installed on this machine"), "{text}");
+    for (w, h) in [(60, 15), (2, 2)] {
+        render(&mut app, w, h);
+    }
+    app.key_for_test(key(KeyCode::Char('s')));
+    render(&mut app, 120, 40);
+    app.key_for_test(key(KeyCode::Esc));
+    assert_eq!(app.screen_name_for_test(), "main");
+
+    // Tick the first candidate and save: apps.toml grows, the old copy is
+    // kept, the entry is switched on. Skipped on a machine with nothing to
+    // review.
+    let apps_file = _dir.path().join("config/apps.toml");
+    let before = std::fs::read_to_string(&apps_file).unwrap();
+    app.key_for_test(key(KeyCode::Enter));
+    app.key_for_test(key(KeyCode::Char('s')));
+    let text = render(&mut app, 120, 40);
+    if text.contains(" · ") {
+        app.key_for_test(key(KeyCode::Char(' ')));
+        app.key_for_test(key(KeyCode::Char('w')));
+        assert_eq!(app.screen_name_for_test(), "main");
+        let after = std::fs::read_to_string(&apps_file).unwrap();
+        assert!(after.len() > before.len(), "{after}");
+        assert!(_dir.path().join("config/apps.toml.bak").exists());
+        let config = std::fs::read_to_string(_dir.path().join("config/config.toml")).unwrap();
+        assert!(config.contains("= true"), "{config}");
+    } else {
+        app.key_for_test(key(KeyCode::Esc));
+    }
 }

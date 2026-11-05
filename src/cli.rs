@@ -93,9 +93,9 @@ fn self_update() -> Result<i32> {
             exe.display()
         );
     }
-    if let Some(owner) = package_owning(&exe) {
+    if let Some(owner) = crate::system::package_owning(&exe) {
         bail!(
-            "{} was installed by a package manager ({owner}). Update it there instead,              with pacman or yay.",
+            "{} was installed by a package manager ({owner}). Update it there with pacman or yay.",
             exe.display()
         );
     }
@@ -115,14 +115,6 @@ fn self_update() -> Result<i32> {
         .env("CACHYUP_BIN_DIR", dir)
         .status()?;
     Ok(if status.success() { 0 } else { 1 })
-}
-
-/// The package that owns a file, per `pacman -Qo`, if any.
-fn package_owning(path: &std::path::Path) -> Option<String> {
-    let out = crate::system::capture("pacman", &["-Qo", &path.to_string_lossy()])?;
-    // "/usr/bin/cachyup is owned by cachyup 0.2.0-1"
-    let (_, owner) = out.trim().split_once(" is owned by ")?;
-    Some(owner.to_string())
 }
 
 fn reset(paths: &Paths, yes: bool) -> Result<i32> {
@@ -165,10 +157,15 @@ fn headless(paths: Paths, dry: bool) -> Result<i32> {
             app.launch.removed.join(", ")
         );
     }
-    if !app.launch.new_apps.is_empty() {
+    let installed = app
+        .installed_candidates()
+        .iter()
+        .filter(|c| c.hidden.is_none())
+        .count();
+    let builtin = app.builtin_candidates().len();
+    if installed + builtin > 0 {
         eprintln!(
-            "New in cachyup, not in your apps.toml: {}",
-            app.launch.new_apps.join(", ")
+            "To review (Settings in the interface): {installed} installed since your last review, {builtin} new in cachyup"
         );
     }
     if !crate::sudo::ensure(std::io::stdin().is_terminal()) && !dry {

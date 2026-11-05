@@ -154,7 +154,7 @@ pub struct Package {
 
 impl Package {
     /// `name` (pacman) or `source/name`; installers are not packages.
-    fn parse(spec: &str) -> Result<Self> {
+    pub fn parse(spec: &str) -> Result<Self> {
         let (source, name) = match spec.split_once('/') {
             Some((s, n)) => (
                 Source::from_id(s)

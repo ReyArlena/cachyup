@@ -51,10 +51,6 @@ pub fn off() -> Style {
     Style::default().fg(DIM)
 }
 
-pub fn new_item() -> Style {
-    Style::default().fg(NEW).add_modifier(Modifier::BOLD)
-}
-
 pub fn badge_new() -> Style {
     Style::default()
         .fg(Color::White)

@@ -71,12 +71,32 @@ Changes are saved as you make them.
 | Full System Update | Each step on or off: rate mirrors, keyrings, `pacman -Syu`, `yay -Sua`, `flatpak update`, and the cleanup steps. Numbers: mirror rating cooldown, package cache versions, yay cache age, runs kept in history. |
 | Install Apps | Every app in the list, grouped by source, with a status column (Installed, Not installed, Unavailable; an installed app says "will update" when the full system update, as set up now, would upgrade it: its source's step on, and for an installer the Installer updates step, an `update` command and the app selected). Tweaks for an app are listed under it. `i` shows the description and package details, `I` shows a description line under every entry (remembered), `/` filters, `a` switches a whole group. |
 | Install Tweaks | The same tweaks as a flat list, with Applied / Not applied (`I` for descriptions). Toggling here and under the app is the same switch. Turning a tweak on also turns on its app if that app is not installed (a tweak is skipped while its app is missing). |
+| Settings | Not a task: your app list. Edit it in your editor, add one app by name, or review what could be added (see below). The sidebar shows how many entries are waiting for a review. |
 
-Ticks are green and switched on; crosses are grey and switched off. Blue entries with a
-`new` badge were added in a cachyup update and start switched off. Names say what an entry
-does; anything about its current state is in brackets after it, e.g. `Set as default link
-handler (currently dms-open)` for a tweak not yet applied, or `(default off: dux-shell
+Ticks are green and switched on; crosses are grey and switched off. Names say what an
+entry does; anything about its current state is in brackets after it, e.g. `Set as default
+link handler (currently dms-open)` for a tweak not yet applied, or `(default off: dux-shell
 installed)` for an app that is off by default on this machine.
+
+### Reviewing what to add
+
+Two things can be added to your list without typing, both under Settings:
+
+- **Apps installed on this machine.** Explicitly installed packages (`pacman -Qe`, repo
+  and AUR) and flatpak apps that are not in your list. Dependencies and runtimes never
+  show. Kernels, drivers, firmware and base-system packages are set aside as
+  machine-specific; `s` shows them.
+- **New in cachyup.** Entries cachyup ships that your list lacks, after an update.
+
+The review screen is a tick list: `Space` ticks one, `a` a group, `A` everything shown,
+`/` filters. Nothing is written until `w`, which appends the ticked entries to
+`apps.toml` (layout and comments kept, the previous copy saved as `apps.toml.bak`),
+switches them on, and marks everything that was on screen as reviewed, so only what is
+installed after that counts as new. Entries from cachyup that you leave unticked are not
+offered again. `Esc` discards the draft; with ticks pending it asks first.
+
+A popup at launch says how many entries are waiting. Decline it and the counts stay in
+the sidebar until you get to them.
 
 `r` asks for confirmation: `Enter` runs, `d` does a dry run, `Esc` cancels. While running,
 the left pane ticks off each step and the right pane shows the full terminal output.
@@ -149,8 +169,8 @@ Every app and tweak is on or off, saved under `[apps]` and `[tweaks]` in
   `default = true` starts on, unless its `unless_cmd` command exists: Junction (a link
   chooser) stays off when Dux Shell's `dms` command is installed, because Dux Shell has
   its own link chooser.
-- **cachyup adds an app in an update:** a popup at launch names the entries cachyup now
-  ships that are not in your `apps.toml`, once. Add the ones you want to the file.
+- **cachyup adds an app in an update:** the launch popup counts it and Settings offers it
+  for review. Nothing enters your list until you tick it.
 - **You uninstall an app cachyup installed:** at the next launch it is switched off, with a
   popup saying so, so it is not reinstalled behind your back. Switch it on to get it back.
 - **An app is dropped from the list:** it is forgotten. If it comes back later it counts as

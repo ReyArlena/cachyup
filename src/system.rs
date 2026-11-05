@@ -69,6 +69,66 @@ pub fn capture_any(program: &str, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// What the user installed on purpose: explicitly installed packages
+/// (`pacman -Qe`, native and foreign) and flatpak apps, never dependencies
+/// or runtimes. Plus the kernel and headers packages, found from the files
+/// they own, so they can be set aside as machine-specific.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Explicit {
+    pub pacman: Vec<String>,
+    pub aur: Vec<String>,
+    pub flatpak: Vec<String>,
+    pub kernels: HashSet<String>,
+}
+
+impl Explicit {
+    pub fn probe() -> Self {
+        let lines = |s: String| -> Vec<String> {
+            s.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(String::from)
+                .collect()
+        };
+        let pacman = capture("pacman", &["-Qenq"]).map(lines).unwrap_or_default();
+        let aur = capture("pacman", &["-Qemq"]).map(lines).unwrap_or_default();
+        let flatpak = if has_cmd("flatpak") {
+            capture("flatpak", &["list", "--app", "--columns=application"])
+                .map(lines)
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let mut kernels = HashSet::new();
+        if let Ok(dirs) = std::fs::read_dir("/usr/lib/modules") {
+            for dir in dirs.flatten() {
+                for file in ["vmlinuz", "build"] {
+                    let path = dir.path().join(file);
+                    if path.exists()
+                        && let Some(owner) = package_owning(&path)
+                    {
+                        kernels.insert(owner);
+                    }
+                }
+            }
+        }
+        Self {
+            pacman,
+            aur,
+            flatpak,
+            kernels,
+        }
+    }
+}
+
+/// The package that owns a file, per `pacman -Qo`, if any.
+pub fn package_owning(path: &Path) -> Option<String> {
+    let out = capture("pacman", &["-Qo", &path.to_string_lossy()])?;
+    // "/usr/lib/modules/7.3.1-1-cachyos/vmlinuz is owned by linux-cachyos 7.3.1-1"
+    let (_, owner) = out.trim().split_once(" is owned by ")?;
+    Some(owner.split_whitespace().next()?.to_string())
+}
+
 /// Installed packages and flatpaks, read in two quick calls.
 #[derive(Debug, Clone, Default)]
 pub struct Installed {

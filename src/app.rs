@@ -7,11 +7,12 @@ use anyhow::{Context, Result};
 
 use crate::catalog::{App, Catalog};
 use crate::config::Config;
+use crate::discover::{BuiltinCandidate, Candidate, builtin_candidates, installed_candidates};
 use crate::engine::{Plan, RunRecord, build_plan};
 use crate::paths::Paths;
 use crate::selection::{Reconciled, Selection, reconcile};
 use crate::state::State;
-use crate::system::{Installed, has_cmd};
+use crate::system::{Explicit, Installed, has_cmd};
 
 pub struct AppState {
     pub paths: Paths,
@@ -20,6 +21,8 @@ pub struct AppState {
     pub catalog: Catalog,
     pub state: State,
     pub installed: Installed,
+    /// Explicitly installed packages and flatpak apps, for the review.
+    pub explicit: Explicit,
     /// What changed at this launch (new apps, removed apps).
     pub launch: Reconciled,
     pub first_launch: bool,
@@ -36,9 +39,9 @@ impl AppState {
         notes.append(&mut catalog.warnings);
         catalog.warnings = notes;
         let installed = Installed::probe();
+        let explicit = Explicit::probe();
         let (state, launch) = reconcile(
             &catalog,
-            &Catalog::builtin(),
             &mut config.selection,
             saved,
             &|app: &App| installed.app(app, &paths),
@@ -50,6 +53,7 @@ impl AppState {
             catalog,
             state,
             installed,
+            explicit,
             launch,
             first_launch,
         };
@@ -75,6 +79,32 @@ impl AppState {
 
     pub fn save_state(&self) -> Result<()> {
         self.state.save(&self.paths.state_file())
+    }
+
+    /// Installed apps the list lacks and the user has not reviewed.
+    pub fn installed_candidates(&self) -> Vec<Candidate> {
+        installed_candidates(&self.explicit, &self.catalog, &self.state)
+    }
+
+    /// Entries cachyup ships that the list lacks and the user has not dismissed.
+    pub fn builtin_candidates(&self) -> Vec<BuiltinCandidate> {
+        builtin_candidates(&Catalog::builtin(), &self.catalog, &self.state)
+    }
+
+    /// Add entries from `extra` (TOML in the apps.toml layout) whose keys
+    /// `keep` accepts to the user's apps.toml, keeping its layout. The old
+    /// file is kept as `apps.toml.bak`. The caller reloads afterwards.
+    pub fn merge_into_apps(&self, extra: &str, keep: impl Fn(&str) -> bool) -> Result<()> {
+        let file = self.paths.apps_file();
+        let current = std::fs::read_to_string(&file)
+            .with_context(|| format!("reading {}", file.display()))?;
+        let merged = crate::apps_edit::append_where(&current, extra, keep)?;
+        if merged != current {
+            crate::paths::write_file(&file.with_extension("toml.bak"), &current)?;
+            crate::paths::write_file(&file, &merged)
+                .with_context(|| format!("writing {}", file.display()))?;
+        }
+        Ok(())
     }
 
     pub fn plan(&self, dry: bool) -> Plan {

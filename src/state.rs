@@ -14,10 +14,12 @@ use crate::paths::write_file;
 pub struct State {
     /// cachyup version of the last launch.
     pub version: Option<String>,
-    /// Built-in app keys already announced to the user. A built-in entry
-    /// outside this set is new in cachyup.
-    pub seen_apps: BTreeSet<String>,
-    pub seen_tweaks: BTreeSet<String>,
+    /// Installed apps (`source/name`) the user has looked at in a review,
+    /// added or not. Only what is installed since then counts as new.
+    pub reviewed: BTreeSet<String>,
+    /// Built-in entries (`source/name`, `tweak/id`) the user chose not to
+    /// add. Not offered again.
+    pub dismissed: BTreeSet<String>,
     /// Apps cachyup installed, or found installed while selected, at least
     /// once. If one of these goes missing it was removed on purpose.
     pub managed: BTreeSet<String>,

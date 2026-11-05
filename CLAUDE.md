@@ -5,9 +5,9 @@ Sets up and updates a CachyOS install: a Rust binary with a ratatui TUI and a he
 ## Layout
 
 - `apps.toml` the app and tweak list, compiled in and copied to `~/.config/cachyup/apps.toml` on first launch; the copy is what runs. `src/catalog.rs` parses it, `src/apps_edit.rs` merges entries into the user's copy without touching its layout (toml_edit).
-- `src/config.rs` (config.toml, `UPDATE_STEPS`, `NUMBER_SETTINGS`, holds the selection), `src/selection.rs` (on/off per app/tweak under `[apps]`/`[tweaks]` in config.toml, launch reconciliation), `src/state.rs` (announced built-in entries, managed apps).
+- `src/config.rs` (config.toml, `UPDATE_STEPS`, `NUMBER_SETTINGS`, holds the selection), `src/selection.rs` (on/off per app/tweak under `[apps]`/`[tweaks]` in config.toml, launch reconciliation), `src/state.rs` (reviewed and dismissed entries, managed apps). `src/discover.rs` finds what a review can offer: explicitly installed packages and flatpaks not in the list, with machine-specific ones (kernels, drivers, firmware) set aside, and built-in entries the list lacks.
 - `src/engine/` the core: `plan.rs` builds the ordered steps, `steps.rs` holds every step body, `ctx.rs` runs commands (streamed, dry-run aware), `runner.rs` the worker thread, `record.rs` run.json.
-- `src/tui/` the interface: `app.rs` event loop and effects, `main_screen.rs`, `run_screen.rs`, `history.rs`, `widgets.rs`, `input.rs`, `theme.rs`.
+- `src/tui/` the interface: `app.rs` event loop and effects, `main_screen.rs` (tasks and Settings), `review.rs` (tick list that merges into apps.toml), `run_screen.rs`, `history.rs`, `widgets.rs`, `input.rs`, `theme.rs`.
 - `src/app.rs` shared bootstrap (`AppState`) for the TUI and the CLI.
 
 ## Rules

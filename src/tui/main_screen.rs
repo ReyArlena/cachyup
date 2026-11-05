@@ -1,7 +1,7 @@
 //! The main screen: tasks on the left, the highlighted task's options on the
 //! right. `c` (or Enter, Tab, Right) moves into the options to change them.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crossterm::event::KeyCode;
 use ratatui::Frame;
@@ -18,6 +18,7 @@ use crate::system::{InfoMap, has_cmd};
 
 use super::Effect;
 use super::input::{Action, Hit, HitMap};
+use super::review::ReviewKind;
 use super::theme;
 use super::widgets::{Button, Modal, TextInput, clamp_scroll, pane_block};
 
@@ -29,17 +30,29 @@ pub enum Task {
     Update,
     Apps,
     Tweaks,
+    /// Not a task: the app list itself (edit, add, review).
+    Settings,
 }
 
 impl Task {
-    pub const ALL: [Task; 3] = [Task::Update, Task::Apps, Task::Tweaks];
+    pub const ALL: [Task; 4] = [Task::Update, Task::Apps, Task::Tweaks, Task::Settings];
 
     pub fn label(self) -> &'static str {
         match self {
             Task::Update => crate::engine::plan::TASK_UPDATE,
             Task::Apps => crate::engine::plan::TASK_APPS,
             Task::Tweaks => crate::engine::plan::TASK_TWEAKS,
+            Task::Settings => "Settings",
         }
+    }
+
+    fn is_task(self) -> bool {
+        self != Task::Settings
+    }
+
+    /// Apps and Tweaks: the panes with filter, descriptions and toggle-all.
+    fn lists_apps(self) -> bool {
+        matches!(self, Task::Apps | Task::Tweaks)
     }
 
     fn help(self) -> &'static str {
@@ -53,6 +66,9 @@ impl Task {
             Task::Tweaks => {
                 "Apply config tweaks for your apps. Each is skipped while its app is not installed. c to choose tweaks."
             }
+            Task::Settings => {
+                "Your app list (~/.config/cachyup/apps.toml): edit it, add an app, or review what could be added. c to open."
+            }
         }
     }
 
@@ -62,6 +78,7 @@ impl Task {
             Task::Update => t.update,
             Task::Apps => t.apps,
             Task::Tweaks => t.tweaks,
+            Task::Settings => true,
         }
     }
 
@@ -71,6 +88,51 @@ impl Task {
             Task::Update => t.update = on,
             Task::Apps => t.apps = on,
             Task::Tweaks => t.tweaks = on,
+            Task::Settings => {}
+        }
+    }
+}
+
+/// The rows of the Settings pane.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Setting {
+    Edit,
+    Add,
+    ReviewInstalled,
+    ReviewBuiltin,
+}
+
+impl Setting {
+    const ALL: [Setting; 4] = [
+        Setting::Edit,
+        Setting::Add,
+        Setting::ReviewInstalled,
+        Setting::ReviewBuiltin,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            Setting::Edit => "Edit the app list in your editor",
+            Setting::Add => "Add an app by name",
+            Setting::ReviewInstalled => "Review apps installed on this machine",
+            Setting::ReviewBuiltin => "Review what is new in cachyup",
+        }
+    }
+
+    fn help(self) -> &'static str {
+        match self {
+            Setting::Edit => {
+                "Opens ~/.config/cachyup/apps.toml in $VISUAL, $EDITOR or xdg-open, and re-reads it when you are done"
+            }
+            Setting::Add => {
+                "A pacman name, aur/name or flatpak/id. Appended to apps.toml and switched on"
+            }
+            Setting::ReviewInstalled => {
+                "Explicitly installed packages and flatpaks that are not in your list: tick the ones to add. Kernels, drivers and firmware are set aside"
+            }
+            Setting::ReviewBuiltin => {
+                "Entries cachyup ships that your list lacks: tick the ones to add, the rest are not offered again"
+            }
         }
     }
 }
@@ -91,6 +153,7 @@ enum Row {
         id: String,
         nested: bool,
     },
+    Setting(Setting),
     Blank,
     /// The description line under an app or tweak (`I`).
     Desc(Box<Row>),
@@ -106,14 +169,14 @@ pub struct MainScreen {
     focus: usize,
     task: usize,
     /// Cursor and scroll per task.
-    cursor: [usize; 3],
-    offset: [usize; 3],
+    cursor: [usize; 4],
+    offset: [usize; 4],
     filter: TextInput,
     filtering: bool,
     /// Show a description line under every app and tweak.
     show_desc: bool,
-    /// Built-in apps and tweaks new since the last launch: blue, with a badge.
-    pub new_items: HashSet<String>,
+    /// (installed, new in cachyup) waiting for a review; shown in Settings.
+    review_counts: (usize, usize),
     tweak_status: HashMap<String, bool>,
     /// For tweaks not in place: what the file holds now.
     tweak_current: HashMap<String, String>,
@@ -127,18 +190,12 @@ impl MainScreen {
         let mut s = Self {
             focus: PANE_TASKS,
             task: 0,
-            cursor: [0; 3],
-            offset: [0; 3],
+            cursor: [0; 4],
+            offset: [0; 4],
             filter: TextInput::default(),
             filtering: false,
             show_desc: app.config.settings.show_descriptions,
-            new_items: app
-                .launch
-                .new_apps
-                .iter()
-                .chain(&app.launch.new_tweaks)
-                .cloned()
-                .collect(),
+            review_counts: (0, 0),
             tweak_status: HashMap::new(),
             tweak_current: HashMap::new(),
             conditions: app
@@ -165,8 +222,9 @@ impl MainScreen {
         s
     }
 
-    /// Re-read what is on disk (after a run).
+    /// Re-read what is on disk (after a run, an edit or a review).
     pub fn refresh(&mut self, app: &AppState) {
+        self.review_counts = review_counts(app);
         self.tweak_status = app
             .catalog
             .tweaks
@@ -189,18 +247,11 @@ impl MainScreen {
         Task::ALL[self.task]
     }
 
-    /// Jump to the app list with the cursor on the first new app.
-    pub fn review_new(&mut self, app: &AppState) {
-        self.task = 1;
+    /// Jump to the Settings pane.
+    pub fn open_settings(&mut self, app: &AppState) {
+        self.task = Task::ALL.len() - 1;
         self.focus = PANE_OPTIONS;
-        self.filter = TextInput::default();
-        let rows = self.rows(app);
-        if let Some(i) = rows.iter().position(|r| match r {
-            Row::App(k) => self.new_items.contains(k),
-            _ => false,
-        }) {
-            self.cursor[1] = i;
-        }
+        self.snap_cursor(app);
     }
 
     fn rows(&self, app: &AppState) -> Vec<Row> {
@@ -227,6 +278,11 @@ impl MainScreen {
                     "Post-update checks",
                     "Report only: .pacnew files, pending reboot, services to restart, AUR packages needing a rebuild",
                 ));
+                rows
+            }
+            Task::Settings => {
+                let mut rows = vec![Row::Header("Your app list".into())];
+                rows.extend(Setting::ALL.iter().map(|s| Row::Setting(*s)));
                 rows
             }
             Task::Apps => {
@@ -376,12 +432,16 @@ impl MainScreen {
             Action::Down => self.task = (self.task + 1).min(Task::ALL.len() - 1),
             Action::Home => self.task = 0,
             Action::End => self.task = Task::ALL.len() - 1,
-            Action::Toggle => {
+            Action::Toggle if self.current().is_task() => {
                 let t = self.current();
                 t.set(app, !t.on(app));
                 return vec![Effect::SaveConfig];
             }
-            Action::Char('c') | Action::Confirm | Action::Right | Action::NextPane => {
+            Action::Char('c')
+            | Action::Confirm
+            | Action::Right
+            | Action::NextPane
+            | Action::Toggle => {
                 self.focus = PANE_OPTIONS;
                 self.snap_cursor(app);
             }
@@ -463,10 +523,10 @@ impl MainScreen {
                     self.focus = PANE_TASKS;
                 }
             }
-            Action::Char('I') if self.current() != Task::Update => {
+            Action::Char('I') if self.current().lists_apps() => {
                 return self.toggle_descriptions(app);
             }
-            Action::Char('/') if self.current() != Task::Update => {
+            Action::Char('/') if self.current().lists_apps() => {
                 self.filtering = true;
             }
             Action::Char('i') => {
@@ -481,7 +541,7 @@ impl MainScreen {
             Action::Char('a') if self.current() == Task::Apps => {
                 return self.toggle_group(&rows, app);
             }
-            Action::Char('A') if self.current() != Task::Update => {
+            Action::Char('A') if self.current().lists_apps() => {
                 return self.toggle_all(&rows, app);
             }
             Action::Toggle | Action::Confirm => {
@@ -538,6 +598,17 @@ impl MainScreen {
                 ))]
             }
             Row::Fixed(..) => vec![Effect::Toast("always runs".into())],
+            Row::Setting(Setting::Edit) => vec![Effect::EditApps],
+            Row::Setting(Setting::Add) => vec![Effect::Modal(Modal::input(
+                "Add an app",
+                "A pacman package name, aur/name or flatpak/id.\nIt is appended to apps.toml and switched on.",
+                "",
+                "add-app",
+            ))],
+            Row::Setting(Setting::ReviewInstalled) => {
+                vec![Effect::Review(ReviewKind::Installed)]
+            }
+            Row::Setting(Setting::ReviewBuiltin) => vec![Effect::Review(ReviewKind::Builtin)],
             Row::App(key) => {
                 let on = app.config.selection.app_on(key);
                 app.set_app(key, !on);
@@ -834,6 +905,7 @@ impl MainScreen {
                     ("A", "all"),
                     ("/", "filter"),
                 ]),
+                Task::Settings => hints.push(("Enter", "open")),
             }
             hints.push(("Esc", "back"));
         }
@@ -865,7 +937,9 @@ impl MainScreen {
         let mut lines = Vec::new();
         for (i, task) in Task::ALL.iter().enumerate() {
             let on = task.on(app);
-            let (mark, style) = if on {
+            let (mark, style) = if !task.is_task() {
+                ("▸", theme::heading())
+            } else if on {
                 ("✓", theme::on())
             } else {
                 ("✗", theme::off())
@@ -910,7 +984,11 @@ impl MainScreen {
         hits: &mut HitMap,
     ) {
         let focused = self.focus == PANE_OPTIONS;
-        let title = format!("{} options", self.current().label());
+        let title = if self.current().is_task() {
+            format!("{} options", self.current().label())
+        } else {
+            self.current().label().to_string()
+        };
         let block = pane_block(&title, focused);
         let inner = block.inner(area);
         frame.render_widget(block, area);
@@ -1068,21 +1146,29 @@ impl MainScreen {
                 Span::styled(name.to_string(), theme::dim()),
                 Span::styled("  (always)", theme::dim()),
             ]),
+            Row::Setting(s) => {
+                let (installed, builtin) = self.review_counts;
+                let count = match s {
+                    Setting::ReviewInstalled => Some(installed),
+                    Setting::ReviewBuiltin => Some(builtin),
+                    _ => None,
+                };
+                let mut spans = vec![Span::raw(" ▸ "), Span::raw(s.label())];
+                match count {
+                    Some(0) => spans.push(Span::styled("  (nothing new)", theme::dim())),
+                    Some(n) => spans.push(Span::styled(format!("  ({n})"), theme::on())),
+                    None => {}
+                }
+                Line::from(spans)
+            }
             Row::App(key) => {
                 let Some(a) = app.catalog.app(key) else {
                     return Line::from(key.clone());
                 };
                 let on = app.config.selection.app_on(key);
-                let new = self.new_items.contains(key);
-                let (m, mut style) = mark(on, true);
-                if new && !on {
-                    style = theme::new_item();
-                }
+                let (m, style) = mark(on, true);
                 let (status, status_style) = app_status(a, app, info);
                 let mut badge = Vec::new();
-                if new {
-                    badge.push(Span::styled(" new ", theme::badge_new()));
-                }
                 if let Some(package) = a.unless_cmd.as_ref().and_then(|c| self.conditions.get(c)) {
                     badge.push(Span::styled(
                         format!(" (default off: {package} installed)"),
@@ -1105,11 +1191,7 @@ impl MainScreen {
                     return Line::from(id.clone());
                 };
                 let on = app.config.selection.tweak_on(id);
-                let new = self.new_items.contains(id);
-                let (m, mut style) = mark(on, true);
-                if new && !on {
-                    style = theme::new_item();
-                }
+                let (m, style) = mark(on, true);
                 let name = if *nested {
                     t.name.clone()
                 } else {
@@ -1134,9 +1216,6 @@ impl MainScreen {
                     ("Not applied".to_string(), theme::dim())
                 };
                 let mut badge = Vec::new();
-                if new {
-                    badge.push(Span::styled(" new ", theme::badge_new()));
-                }
                 if let Some(current) = self.tweak_current.get(id) {
                     badge.push(Span::styled(
                         format!(" (currently {current})"),
@@ -1162,6 +1241,7 @@ impl MainScreen {
             Row::Step(i) => UPDATE_STEPS[*i].help.to_string(),
             Row::Number(i) => format!("{} (Enter to change)", NUMBER_SETTINGS[*i].help),
             Row::Fixed(_, help) => help.to_string(),
+            Row::Setting(s) => format!("{} (Enter to open)", s.help()),
             Row::App(_) => match describe(row, app, info) {
                 Some(d) => format!("{d}  (i for details)"),
                 None if info.is_empty() => "Reading package info...".into(),
@@ -1299,7 +1379,25 @@ fn task_summary(task: Task, app: &AppState) -> String {
                 .count();
             format!("{on} of {} selected", app.catalog.tweaks.len())
         }
+        Task::Settings => {
+            let (installed, builtin) = review_counts(app);
+            match installed + builtin {
+                0 => "nothing to review".into(),
+                n => format!("{n} to review"),
+            }
+        }
     }
+}
+
+/// (installed and not reviewed, new in cachyup), the counts Settings shows.
+/// Packages set aside as machine-specific are not counted.
+fn review_counts(app: &AppState) -> (usize, usize) {
+    let installed = app
+        .installed_candidates()
+        .iter()
+        .filter(|c| c.hidden.is_none())
+        .count();
+    (installed, app.builtin_candidates().len())
 }
 
 #[cfg(test)]

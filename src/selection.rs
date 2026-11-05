@@ -40,10 +40,6 @@ impl Selection {
 /// What changed at launch, for the startup popups.
 #[derive(Debug, Default, PartialEq)]
 pub struct Reconciled {
-    /// Built-in entries that are not in the user's apps.toml, first noticed
-    /// at this launch. Keys and tweak ids of the built-in list.
-    pub new_apps: Vec<String>,
-    pub new_tweaks: Vec<String>,
     /// Apps cachyup had installed that are gone now; switched off.
     pub removed: Vec<String>,
 }
@@ -62,21 +58,17 @@ pub fn tweak_default(tweak: &Tweak, has_cmd: &dyn Fn(&str) -> bool) -> bool {
 ///
 /// - Entries in the list but not in the selection get their default.
 /// - Entries no longer in the list are forgotten.
-/// - Built-in entries missing from the user's list are reported once, so a
-///   cachyup update can say what it added.
 /// - A managed app that is selected but no longer installed was removed by
 ///   hand: it is switched off and reported.
 ///
 /// `installed` returns `None` when it cannot tell (the probe failed).
 pub fn reconcile(
     catalog: &Catalog,
-    builtin: &Catalog,
     selection: &mut Selection,
     state: Option<State>,
     installed: &dyn Fn(&App) -> Option<bool>,
     has_cmd: &dyn Fn(&str) -> bool,
 ) -> (State, Reconciled) {
-    let first_launch = state.is_none();
     let mut state = state.unwrap_or_default();
     let mut out = Reconciled::default();
 
@@ -99,26 +91,6 @@ pub fn reconcile(
             .tweaks
             .entry(tweak.id.clone())
             .or_insert_with(|| tweak_default(tweak, has_cmd));
-    }
-
-    // Built-in entries the user's list lacks: announce each once. On the
-    // first launch the list is a fresh copy, so there is nothing to say.
-    let builtin_keys: Vec<String> = builtin.apps.iter().map(App::key).collect();
-    state.seen_apps.retain(|k| builtin_keys.contains(k));
-    for key in builtin_keys {
-        if state.seen_apps.insert(key.clone()) && !first_launch && !app_keys.contains(&key) {
-            out.new_apps.push(key);
-        }
-    }
-    let builtin_tweaks: Vec<String> = builtin.tweaks.iter().map(|t| t.id.clone()).collect();
-    state.seen_tweaks.retain(|k| builtin_tweaks.contains(k));
-    for id in builtin_tweaks {
-        if state.seen_tweaks.insert(id.clone())
-            && !first_launch
-            && !tweak_ids.contains(&id.as_str())
-        {
-            out.new_tweaks.push(id);
-        }
     }
 
     let managed: Vec<String> = state.managed.iter().cloned().collect();
@@ -153,10 +125,9 @@ mod tests {
         let c = catalog(
             "pacman = [\"htop\", { name = \"junction\", default = true, unless_cmd = \"dms\" }]\n",
         );
-        let b = Catalog::builtin();
         let mut sel = Selection::default();
         let dms = |cmd: &str| cmd == "dms";
-        let (state, out) = reconcile(&c, &b, &mut sel, None, &|_| Some(true), &dms);
+        let (_, out) = reconcile(&c, &mut sel, None, &|_| Some(true), &dms);
         assert_eq!(
             out,
             Reconciled::default(),
@@ -165,10 +136,9 @@ mod tests {
         assert!(!sel.app_on("pacman/htop"));
         assert!(!sel.app_on("pacman/junction"), "DMS present: junction off");
         assert_eq!(sel.apps.len(), 2);
-        assert_eq!(state.seen_apps.len(), b.apps.len());
 
         let mut sel = Selection::default();
-        reconcile(&c, &b, &mut sel, None, &|_| Some(true), &|_| false);
+        reconcile(&c, &mut sel, None, &|_| Some(true), &|_| false);
         assert!(
             sel.app_on("pacman/junction"),
             "no DMS: default = true applies"
@@ -176,39 +146,17 @@ mod tests {
     }
 
     #[test]
-    fn builtin_entries_missing_from_the_list_are_reported_once() {
-        let c = catalog("pacman = [\"htop\"]\n");
-        let b = Catalog::builtin();
-        let mut sel = Selection::default();
-        let mut state = State::default();
-        for app in &b.apps {
-            if app.name != "discord" {
-                state.seen_apps.insert(app.key());
-            }
-        }
-        state.seen_tweaks = b.tweaks.iter().map(|t| t.id.clone()).collect();
-        let (state, out) = reconcile(&c, &b, &mut sel, Some(state), &|_| Some(true), &|_| false);
-        assert_eq!(out.new_apps, vec!["pacman/discord".to_string()]);
-        assert!(out.new_tweaks.is_empty());
-        assert!(sel.apps.contains_key("pacman/htop"));
-        assert!(!sel.apps.contains_key("pacman/discord"), "not in the list");
-        assert!(state.seen_apps.contains("pacman/discord"));
-        let (_, out) = reconcile(&c, &b, &mut sel, Some(state), &|_| Some(true), &|_| false);
-        assert!(out.new_apps.is_empty(), "announced once");
-    }
-
-    #[test]
     fn removed_managed_apps_are_switched_off() {
         let c = Catalog::builtin();
         let mut sel = Selection::default();
-        let (mut state, _) = reconcile(&c, &c, &mut sel, None, &|_| Some(true), &|_| false);
+        let (mut state, _) = reconcile(&c, &mut sel, None, &|_| Some(true), &|_| false);
         sel.apps.insert("pacman/discord".into(), true);
         sel.apps.insert("pacman/ark".into(), true);
         state.managed.insert("pacman/discord".into());
         state.managed.insert("pacman/ark".into());
         state.managed.insert("pacman/gone-from-catalog".into());
         let installed = |a: &App| Some(a.name != "discord");
-        let (state, out) = reconcile(&c, &c, &mut sel, Some(state), &installed, &|_| false);
+        let (state, out) = reconcile(&c, &mut sel, Some(state), &installed, &|_| false);
         assert_eq!(out.removed, vec!["pacman/discord".to_string()]);
         assert!(!sel.app_on("pacman/discord"));
         assert!(sel.app_on("pacman/ark"));

@@ -14,6 +14,12 @@ const SECTIONS: [(&str, &str); 2] = [("installer", "name"), ("tweak", "id")];
 /// Entries are matched by name (lists, installers) or id (tweaks). Both
 /// inputs must be valid TOML; nothing in `base` is reformatted.
 pub fn append(base: &str, extra: &str) -> Result<String> {
+    append_where(base, extra, |_| true)
+}
+
+/// Like [`append`], taking only the entries `keep` accepts. Keys are
+/// `pacman/name`, `aur/name`, `flatpak/id`, `installer/name`, `tweak/id`.
+pub fn append_where(base: &str, extra: &str, keep: impl Fn(&str) -> bool) -> Result<String> {
     let mut doc: DocumentMut = base.parse().context("apps.toml")?;
     let extra: DocumentMut = extra.parse().context("file to merge")?;
 
@@ -31,9 +37,10 @@ pub fn append(base: &str, extra: &str) -> Result<String> {
             let Some(name) = list_name(item) else {
                 continue;
             };
-            if target
-                .iter()
-                .any(|v| list_name(v).as_deref() == Some(&name))
+            if !keep(&format!("{key}/{name}"))
+                || target
+                    .iter()
+                    .any(|v| list_name(v).as_deref() == Some(&name))
             {
                 continue;
             }
@@ -67,9 +74,10 @@ pub fn append(base: &str, extra: &str) -> Result<String> {
             let Some(name) = table.get(id).and_then(Item::as_str) else {
                 continue;
             };
-            if target
-                .iter()
-                .any(|t| t.get(id).and_then(Item::as_str) == Some(name))
+            if !keep(&format!("{key}/{name}"))
+                || target
+                    .iter()
+                    .any(|t| t.get(id).and_then(Item::as_str) == Some(name))
             {
                 continue;
             }
@@ -194,6 +202,16 @@ installs = [\"z\"]
         // The result parses as a catalog.
         let file: Result<toml::Value, _> = toml::from_str(&out);
         assert!(file.is_ok());
+    }
+
+    #[test]
+    fn append_where_filters_by_key() {
+        let extra =
+            "pacman = [\"a\", \"b\"]\n\n[[tweak]]\nid = \"t\"\nname = \"T\"\ninstalls = [\"x\"]\n";
+        let out = append_where("", extra, |k| k == "pacman/b" || k == "tweak/t").unwrap();
+        assert!(out.contains("\"b\""), "{out}");
+        assert!(!out.contains("\"a\""), "{out}");
+        assert!(out.contains("[[tweak]]"), "{out}");
     }
 
     #[test]
