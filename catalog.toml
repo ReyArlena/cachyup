@@ -188,6 +188,14 @@ check = "~/.local/bin/kiln"
 install = "curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sh"
 
 [[installer]]
+name = "lerd"
+label = "Lerd"
+description = "Local PHP development environment (~/.local/bin/lerd)"
+check = "~/.local/bin/lerd"
+install = "curl -fsSL https://lerd.sh/install.sh | bash"
+update = "lerd update"
+
+[[installer]]
 name = "spotify-url-helper"
 label = "Spotify Helper"
 description = "Own installer: ~/.local/bin/spotify-url-helper and a .desktop file"

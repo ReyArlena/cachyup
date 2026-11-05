@@ -13,6 +13,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Dux Files (AUR) with two tweaks: its optional extras (thumbnails, previews, mounts,
   shares) and setting it as the default file manager.
 - Photocraft (AUR).
+- Lerd (installer), with `lerd update` for the installer updates step.
 - Tweaks can run a shell command with `run`, guarded by a `check` command whose exit 0
   means it is done. For settings no file write reaches (`xdg-mime`, `gsettings`,
   `systemctl --user`). Runs after `installs` and `set`, never with sudo.
