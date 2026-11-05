@@ -699,7 +699,7 @@ impl App {
         let name = app.display_name().to_string();
         let Some(cmd) = crate::engine::plan::uninstall_cmd(app) else {
             self.toast(&format!(
-                "{name} came from an install script; switch it off and remove it by hand"
+                "{name}'s entry has no uninstall command; switch it off and remove it by hand"
             ));
             return;
         };

@@ -107,6 +107,8 @@ pub struct Installer {
     pub install: String,
     /// Optional update command, run by the "Installer updates" step.
     pub update: Option<String>,
+    /// Optional removal command, for `u` in the app list.
+    pub uninstall: Option<String>,
 }
 
 impl App {
@@ -341,6 +343,7 @@ impl Catalog {
                     check: def.check,
                     install: def.install,
                     update: def.update.filter(|u| !u.trim().is_empty()),
+                    uninstall: def.uninstall.filter(|u| !u.trim().is_empty()),
                 }),
                 origin,
             });
@@ -477,6 +480,7 @@ struct InstallerDef {
     check: String,
     install: String,
     update: Option<String>,
+    uninstall: Option<String>,
     unless_cmd: Option<String>,
     default: Option<bool>,
 }

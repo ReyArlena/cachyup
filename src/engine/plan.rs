@@ -221,8 +221,10 @@ mod tests {
         assert_eq!(names(&plan), ["Uninstall: Uninstall discord"]);
         let plan = uninstall_plan(catalog.app("flatpak/org.inkscape.Inkscape").unwrap());
         assert_eq!(plan.steps.len(), 1);
-        let plan = uninstall_plan(catalog.app("installer/claude").unwrap());
-        assert!(plan.steps.is_empty());
+        let plan = uninstall_plan(catalog.app("installer/kiln").unwrap());
+        assert!(plan.steps.is_empty(), "no uninstall line");
+        let cmd = steps::uninstall_cmd(catalog.app("installer/claude").unwrap()).unwrap();
+        assert!(cmd.display().starts_with("bash -c"), "{}", cmd.display());
         let cmd = steps::uninstall_cmd(catalog.app("aur/spotify").unwrap()).unwrap();
         assert_eq!(cmd.display(), "sudo pacman -Rns --noconfirm spotify");
     }

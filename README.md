@@ -69,7 +69,7 @@ Changes are saved as you make them.
 | Task | Options |
 |------|---------|
 | Full System Update | Each step on or off: rate mirrors, keyrings, `pacman -Syu`, `yay -Sua`, `flatpak update`, and the cleanup steps. Numbers: mirror rating cooldown, package cache versions, yay cache age, runs kept in history. |
-| Install Apps | Every app in the list, grouped by source, with a status column (Installed, Not installed, Unavailable; an installed app says "will update" when the full system update, as set up now, would upgrade it: its source's step on, and for an installer the Installer updates step, an `update` command and the app selected). Tweaks for an app are listed under it. `i` shows the description and package details, `I` shows a description line under every entry (remembered), `/` filters, `a` switches a whole group. `u` uninstalls the app under the cursor after a confirmation that shows the exact command (`pacman -Rns` or `flatpak uninstall`; `c` copies it to do it by hand) and switches it off so the next run does not put it back. Runs like any other run, streamed and logged. Apps from install scripts have no uninstall. |
+| Install Apps | Every app in the list, grouped by source, with a status column (Installed, Not installed, Unavailable; an installed app says "will update" when the full system update, as set up now, would upgrade it: its source's step on, and for an installer the Installer updates step, an `update` command and the app selected). Tweaks for an app are listed under it. `i` shows the description and package details, `I` shows a description line under every entry (remembered), `/` filters, `a` switches a whole group. `u` uninstalls the app under the cursor after a confirmation that shows the exact command (`pacman -Rns` or `flatpak uninstall`; `c` copies it to do it by hand) and switches it off so the next run does not put it back. Runs like any other run, streamed and logged. Apps from install scripts need an `uninstall` line in their entry. |
 | Install Tweaks | The same tweaks as a flat list, with Applied / Not applied (`I` for descriptions). Toggling here and under the app is the same switch. Turning a tweak on also turns on its app if that app is not installed (a tweak is skipped while its app is missing). |
 | Settings | Not a task: your app list. Edit it in your editor, add one app by name, or review what could be added (see below). The sidebar shows how many entries are waiting for a review. |
 
@@ -249,6 +249,7 @@ description = "Anthropic's coding agent (~/.local/bin/claude)"
 check = "~/.local/bin/claude"
 install = "curl -fsSL https://claude.ai/install.sh | bash"
 update = "claude update"
+uninstall = "rm -rf ~/.local/bin/claude ~/.local/share/claude"
 ```
 
 | Key | Meaning |
@@ -259,6 +260,7 @@ update = "claude update"
 | `check` | A path (`~` allowed) or a command name on PATH. Present means installed. Required. |
 | `install` | Shell command run with `bash -c` as you, only while `check` fails. Required. |
 | `update` | Shell command that updates it in place (`claude update`, `rustup update`). Run by the Installer updates step of a full system update, which is off until you switch it on in the update options. Only while `check` passes and the app is selected. Without it the app is never updated by cachyup. |
+| `uninstall` | Shell command that removes it, for `u` in the app list. Without it `u` only tells you to remove the app by hand. |
 | `default`, `unless_cmd` | As for packages. |
 
 Installers never get sudo. A script that needs it fails rather than prompts. Re-running

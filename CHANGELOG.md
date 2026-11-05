@@ -39,8 +39,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   popup counts what is waiting. Each entry shows its description, `i` its details.
 - `u` in the app list uninstalls an app: a confirmation shows the command (`pacman -Rns
   --noconfirm` or `flatpak uninstall`, `c` copies it), then it runs as a one-step run and
-  the app is switched off so the next run does not reinstall it. Not for install-script
-  apps.
+  the app is switched off so the next run does not reinstall it. Install-script apps
+  take an optional `uninstall` command in their entry (set for cachyup and Claude Code).
 - The help popup (`?`) names your files; `e` there opens `apps.toml` in `$VISUAL`,
   `$EDITOR` or `xdg-open`, and the list is re-read afterwards.
 

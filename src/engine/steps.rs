@@ -405,8 +405,7 @@ fn run_installer(cx: &mut Ctx, app: &App) -> Outcome {
 }
 
 /// The command that removes an app, for the confirmation popup and the
-/// step. `None` for installers: a script put it there, no script takes it
-/// away.
+/// step. An installer app has one only when its entry says `uninstall`.
 pub fn uninstall_cmd(app: &App) -> Option<Cmd> {
     Some(match app.source {
         Source::Pacman | Source::Aur => Cmd::sudo("pacman", &["-Rns", "--noconfirm", &app.name]),
@@ -414,8 +413,20 @@ pub fn uninstall_cmd(app: &App) -> Option<Cmd> {
             "flatpak",
             &["uninstall", "-y", "--noninteractive", &app.name],
         ),
-        Source::Installer => return None,
+        Source::Installer => {
+            let script = app.installer.as_ref()?.uninstall.as_deref()?;
+            Cmd::new("bash", &["-c", script])
+        }
     })
+}
+
+/// Installed, by the check that fits the source.
+fn app_present(cx: &Ctx, app: &App) -> bool {
+    match (&app.source, &app.installer) {
+        (Source::Installer, Some(i)) => installer_present(&i.check, &cx.paths),
+        (Source::Installer, None) => false,
+        (source, _) => package_installed(cx, *source, &app.name),
+    }
 }
 
 /// `u` in the app list: one step that removes the app and checks it is gone.
@@ -425,14 +436,14 @@ pub fn uninstall(s: &mut Vec<Step>, app: App) {
     };
     let label = format!("Uninstall {}", app.display_name());
     s.push(Step::new(GROUP_UNINSTALL, label, move |cx| {
-        if !package_installed(cx, app.source, &app.name) {
+        if !app_present(cx, &app) {
             return Outcome::skipped("not installed");
         }
         let result = cx.exec(&cmd);
         if cx.dry {
             return done(cx);
         }
-        if package_installed(cx, app.source, &app.name) {
+        if app_present(cx, &app) {
             Outcome::failed(result.err().unwrap_or_else(|| "still installed".into()))
         } else {
             Outcome::success()

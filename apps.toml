@@ -174,12 +174,14 @@ flatpak = [
 #   install  shell command run with `bash -c`
 #   update   optional: shell command the "Installer updates" step runs (off
 #            by default in the update options) while the app is present
+#   uninstall  optional: shell command `u` in the app list runs to remove it
 [[installer]]
 name = "cachyup"
 description = "This tool. Installed by its own script; `cachyup update` fetches the latest release"
 check = "cachyup"
 install = "curl -fsSL https://reyarlena.github.io/cachyup/install.sh | sh"
 update = "cachyup update"
+uninstall = "curl -fsSL https://reyarlena.github.io/cachyup/install.sh | sh -s -- --uninstall"
 
 [[installer]]
 name = "claude"
@@ -188,6 +190,7 @@ description = "Anthropic's coding agent for the terminal (native installer, ~/.l
 check = "~/.local/bin/claude"
 install = "curl -fsSL https://claude.ai/install.sh | bash"
 update = "claude update"
+uninstall = "rm -rf ~/.local/bin/claude ~/.local/share/claude"
 
 [[installer]]
 name = "kiln"
