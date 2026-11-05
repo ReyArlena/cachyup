@@ -204,14 +204,26 @@ id = "discord-skip-host-update"
 app = "pacman/discord"
 name = "Disable host update"
 description = "Stop Discord blocking launch until it self-updates; pacman owns updates."
-set = [{ json = "~/.config/discord/settings.json", key = "SKIP_HOST_UPDATE", value = true }]
+set = [
+    {
+        json = "~/.config/discord/settings.json",
+        key = "SKIP_HOST_UPDATE",
+        value = true,
+    },
+]
 
 [[tweak]]
 id = "discordptb-skip-host-update"
 app = "aur/discord-ptb"
 name = "Disable host update"
 description = "Stop Discord PTB blocking launch until it self-updates; yay owns updates."
-set = [{ json = "~/.config/discordptb/settings.json", key = "SKIP_HOST_UPDATE", value = true }]
+set = [
+    {
+        json = "~/.config/discordptb/settings.json",
+        key = "SKIP_HOST_UPDATE",
+        value = true,
+    },
+]
 
 [[tweak]]
 id = "junction-default-browser"
@@ -220,8 +232,18 @@ name = "Set as default link handler"
 description = "Make Junction open http/https links, so clicking a link asks which app to use."
 unless_cmd = "dms"
 set = [
-    { ini = "~/.config/mimeapps.list", section = "Default Applications", key = "x-scheme-handler/http", value = "re.sol.junction.desktop" },
-    { ini = "~/.config/mimeapps.list", section = "Default Applications", key = "x-scheme-handler/https", value = "re.sol.junction.desktop" },
+    {
+        ini = "~/.config/mimeapps.list",
+        section = "Default Applications",
+        key = "x-scheme-handler/http",
+        value = "re.sol.junction.desktop",
+    },
+    {
+        ini = "~/.config/mimeapps.list",
+        section = "Default Applications",
+        key = "x-scheme-handler/https",
+        value = "re.sol.junction.desktop",
+    },
 ]
 
 [[tweak]]
@@ -236,4 +258,11 @@ id = "dux-files-default"
 app = "aur/dux-files-git"
 name = "Set Dux Files as default"
 description = "Make Dux Files the default file manager (xdg-mime default for inode/directory)."
-set = [{ ini = "~/.config/mimeapps.list", section = "Default Applications", key = "inode/directory", value = "dev.duxlabs.files.desktop" }]
+set = [
+    {
+        ini = "~/.config/mimeapps.list",
+        section = "Default Applications",
+        key = "inode/directory",
+        value = "dev.duxlabs.files.desktop",
+    },
+]
