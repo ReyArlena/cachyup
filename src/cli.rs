@@ -1,12 +1,13 @@
 //! Command line. No arguments opens the TUI; `--run` runs the saved settings
-//! without it, for scripts and cron.
+//! without it, for scripts and cron; `update` replaces the binary with the
+//! latest release.
 
 use std::io::{IsTerminal, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use anyhow::{Result, bail};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 use crate::app::{AppState, is_root};
 use crate::engine::runner::RunOptions;
@@ -23,6 +24,9 @@ use crate::paths::Paths;
                   Settings: ~/.config/cachyup   Logs: ~/.local/state/cachyup/runs"
 )]
 pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Command>,
+
     /// Run the saved settings without the interface, then exit.
     #[arg(long)]
     pub run: bool,
@@ -42,11 +46,23 @@ pub struct Cli {
     pub yes: bool,
 }
 
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// Update cachyup itself to the latest release (re-runs the install script).
+    Update,
+}
+
+/// The one-line install, also what `cachyup update` runs.
+pub const INSTALL_CMD: &str = "curl -fsSL https://reyarlena.github.io/cachyup/install.sh | sh";
+
 /// Exit codes: 0 fine, 1 a step failed, 2 error, 3 stopped or aborted early.
 pub fn run_cli(cli: Cli) -> Result<i32> {
     let paths = Paths::from_env();
     if cli.reset {
         return reset(&paths, cli.yes);
+    }
+    if let Some(Command::Update) = cli.command {
+        return self_update();
     }
     if is_root() {
         bail!(
@@ -58,6 +74,55 @@ pub fn run_cli(cli: Cli) -> Result<i32> {
         return headless(paths, cli.dry_run);
     }
     crate::tui::run(paths, cli.dry_run)
+}
+
+/// `cachyup update`: fetch the latest release over this binary, but only
+/// when this binary came from the install script. A package manager's copy
+/// or a cargo build is left to its own tooling.
+fn self_update() -> Result<i32> {
+    if std::env::var_os("CARGO_MANIFEST_DIR").is_some() {
+        bail!("running from source under cargo; rebuild with cargo instead");
+    }
+    let exe = std::env::current_exe()?;
+    let exe = exe.canonicalize().unwrap_or(exe);
+    let in_target = exe.components().any(|c| c.as_os_str() == "target")
+        && exe.parent().is_some_and(|d| d.join("deps").is_dir());
+    if in_target {
+        bail!(
+            "{} looks like a cargo build; rebuild with cargo instead",
+            exe.display()
+        );
+    }
+    if let Some(owner) = package_owning(&exe) {
+        bail!(
+            "{} was installed by a package manager ({owner}). Update it there instead,              with pacman or yay.",
+            exe.display()
+        );
+    }
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    if !home.is_some_and(|h| exe.starts_with(h)) {
+        bail!(
+            "{} is outside your home directory; update it the way it was installed",
+            exe.display()
+        );
+    }
+    let Some(dir) = exe.parent() else {
+        bail!("cannot tell where {} lives", exe.display());
+    };
+    println!("Updating {} ({})", exe.display(), env!("CARGO_PKG_VERSION"));
+    let status = std::process::Command::new("sh")
+        .args(["-c", INSTALL_CMD])
+        .env("CACHYUP_BIN_DIR", dir)
+        .status()?;
+    Ok(if status.success() { 0 } else { 1 })
+}
+
+/// The package that owns a file, per `pacman -Qo`, if any.
+fn package_owning(path: &std::path::Path) -> Option<String> {
+    let out = crate::system::capture("pacman", &["-Qo", &path.to_string_lossy()])?;
+    // "/usr/bin/cachyup is owned by cachyup 0.2.0-1"
+    let (_, owner) = out.trim().split_once(" is owned by ")?;
+    Some(owner.to_string())
 }
 
 fn reset(paths: &Paths, yes: bool) -> Result<i32> {

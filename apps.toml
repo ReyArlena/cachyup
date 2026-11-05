@@ -175,6 +175,13 @@ flatpak = [
 #   update   optional: shell command the "Installer updates" step runs (off
 #            by default in the update options) while the app is present
 [[installer]]
+name = "cachyup"
+description = "This tool. Installed by its own script; `cachyup update` fetches the latest release"
+check = "cachyup"
+install = "curl -fsSL https://reyarlena.github.io/cachyup/install.sh | sh"
+update = "cachyup update"
+
+[[installer]]
 name = "claude"
 label = "Claude Code"
 description = "Anthropic's coding agent for the terminal (native installer, ~/.local/bin/claude)"

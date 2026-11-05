@@ -15,9 +15,12 @@ step checks the real end state first and skips what is already done.
 curl -fsSL https://reyarlena.github.io/cachyup/install.sh | sh
 ```
 
-This puts the `cachyup` binary in `~/.local/bin`. Run the same command again to update;
-cachyup tells you at launch when a new release is out (`c` in that popup copies the
-install command). Run as your normal user, not root.
+This puts the `cachyup` binary in `~/.local/bin`. To update, run `cachyup update` (or the
+same command again); cachyup tells you at launch when a new release is out. `cachyup
+update` only touches a binary the install script put in your home directory: one that
+came from pacman or the AUR, or a cargo build, is left to that tool. cachyup is also in
+the app list as an installer with `update = "cachyup update"`, so the Installer updates
+step keeps it current once switched on. Run as your normal user, not root.
 
 To start from your own app list instead of cachyup's, pass `--apps` with a URL or a
 path. It lands in `~/.config/cachyup/apps.toml` unless that file already exists:

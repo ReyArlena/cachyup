@@ -23,6 +23,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   as the user. Install scripts are never re-run.
 
 - `install.sh --apps URL|path` to start from your own apps file.
+- `cachyup update` re-runs the install script over the running binary. It refuses when
+  the binary is owned by a package (`pacman -Qo`), lives outside your home, or runs under
+  cargo. cachyup itself is in the app list as an installer with that update command.
 - `A` in the app list switches everything shown on, or off again.
 - The app list says "Installed, will update" when the full system update as configured
   would upgrade that app: the step for its source on, and for installers the Installer

@@ -24,7 +24,7 @@ use super::run_screen::RunScreen;
 use super::theme;
 use super::widgets::{Button, Modal, draw_help, draw_key_hints};
 
-pub const INSTALL_CMD: &str = "curl -fsSL https://reyarlena.github.io/cachyup/install.sh | sh";
+use crate::cli::INSTALL_CMD;
 const RELEASES_URL: &str = "https://github.com/ReyArlena/cachyup/releases/latest";
 const RELEASE_API: &str = "https://api.github.com/repos/ReyArlena/cachyup/releases/latest";
 
@@ -220,7 +220,7 @@ impl App {
             let modal = Modal::new(
                 "Update available",
                 Modal::text(&format!(
-                    "cachyup {latest} is out (you have {}).\n\nTo update, run the install command again:\n  {INSTALL_CMD}",
+                    "cachyup v{latest} is out (you have v{}).\n\nTo update, run:\n  cachyup update\n\nor the install command again:\n  {INSTALL_CMD}",
                     env!("CARGO_PKG_VERSION")
                 )),
                 vec![
@@ -656,7 +656,7 @@ impl App {
     fn draw_status_bar(&self, frame: &mut ratatui::Frame, area: Rect) {
         let mut spans = vec![
             Span::styled(
-                format!(" cachyup {} ", env!("CARGO_PKG_VERSION")),
+                format!(" cachyup v{} ", env!("CARGO_PKG_VERSION")),
                 theme::title(),
             ),
             Span::raw(" "),
