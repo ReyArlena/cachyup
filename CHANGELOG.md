@@ -36,7 +36,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   base-system packages set aside behind `s`), and entries new in cachyup. Tick, then `w`
   merges them into `apps.toml` with its layout kept (previous copy in `apps.toml.bak`)
   and switches them on; `Esc` discards. Reviewed entries are not offered again. A launch
-  popup counts what is waiting.
+  popup counts what is waiting. Each entry shows its description, `i` its details.
 - The help popup (`?`) names your files; `e` there opens `apps.toml` in `$VISUAL`,
   `$EDITOR` or `xdg-open`, and the list is re-read afterwards.
 

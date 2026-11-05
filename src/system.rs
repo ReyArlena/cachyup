@@ -222,6 +222,83 @@ pub fn save_info_cache(path: &Path, info: &InfoMap) {
     }
 }
 
+/// What this machine knows about installed packages and flatpak apps, for
+/// the review screen: `pacman -Qi` and `flatpak list`, no network. Keys are
+/// `source/name` as given.
+pub fn installed_info(keys: &[String]) -> InfoMap {
+    let mut info = InfoMap::new();
+    let packages: Vec<&str> = keys
+        .iter()
+        .filter_map(|k| k.strip_prefix("pacman/").or_else(|| k.strip_prefix("aur/")))
+        .collect();
+    if !packages.is_empty() {
+        let mut args = vec!["-Qi"];
+        args.extend(&packages);
+        let parsed = capture_any("pacman", &args)
+            .map(|out| parse_pacman_info(&out))
+            .unwrap_or_default();
+        for key in keys {
+            let Some(name) = key
+                .strip_prefix("pacman/")
+                .or_else(|| key.strip_prefix("aur/"))
+            else {
+                continue;
+            };
+            let Some(fields) = parsed.get(name) else {
+                continue;
+            };
+            let entry = info.entry(key.clone()).or_default();
+            entry.available = Some(true);
+            entry.description = fields.get("Description").cloned();
+            for (label, field) in [
+                ("Installed version", "Version"),
+                ("Installed from", "Installed From"),
+                ("URL", "URL"),
+                ("Installed size", "Installed Size"),
+                ("Install date", "Install Date"),
+            ] {
+                if let Some(v) = fields.get(field) {
+                    entry.details.push((label.into(), v.clone()));
+                }
+            }
+        }
+    }
+    if keys.iter().any(|k| k.starts_with("flatpak/")) && has_cmd("flatpak") {
+        let listing = capture(
+            "flatpak",
+            &[
+                "list",
+                "--app",
+                "--columns=application,name,description,version,origin",
+            ],
+        )
+        .unwrap_or_default();
+        for line in listing.lines() {
+            let cols: Vec<&str> = line.split('\t').collect();
+            if cols.len() < 5 {
+                continue;
+            }
+            let key = format!("flatpak/{}", cols[0]);
+            if !keys.contains(&key) {
+                continue;
+            }
+            let entry = info.entry(key).or_default();
+            entry.available = Some(true);
+            entry.description = Some(cols[2].to_string()).filter(|d| !d.is_empty());
+            entry.details.push(("Name".into(), cols[1].to_string()));
+            if !cols[3].is_empty() {
+                entry
+                    .details
+                    .push(("Installed version".into(), cols[3].to_string()));
+            }
+            entry
+                .details
+                .push(("Installed from".into(), cols[4].to_string()));
+        }
+    }
+    info
+}
+
 /// Ask every source about every app in the catalog. Slow-ish (network for the
 /// AUR and maybe flathub), so call it off the UI thread.
 pub fn fetch_info(catalog: &Catalog, installed: &Installed, paths: &Paths) -> InfoMap {

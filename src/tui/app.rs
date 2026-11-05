@@ -62,6 +62,8 @@ pub struct App {
     run: Option<RunHandle>,
     info: InfoMap,
     info_rx: Option<Receiver<InfoMap>>,
+    /// Descriptions for the open review, fetched in the background.
+    review_info_rx: Option<Receiver<InfoMap>>,
     update_rx: Option<Receiver<String>>,
     sudo: bool,
     /// Started with --dry-run: real runs are off.
@@ -107,6 +109,7 @@ impl App {
             run: None,
             info,
             info_rx: Some(info_rx),
+            review_info_rx: None,
             update_rx,
             sudo,
             dry_only,
@@ -281,6 +284,14 @@ impl App {
         {
             self.info = info;
             self.info_rx = None;
+        }
+        if let Some(rx) = &self.review_info_rx
+            && let Ok(info) = rx.try_recv()
+        {
+            self.review_info_rx = None;
+            if let Some(review) = &mut self.review {
+                review.set_info(info);
+            }
         }
         if let Some(rx) = &self.update_rx
             && let Ok(latest) = rx.try_recv()
@@ -518,7 +529,9 @@ impl App {
                     }
                 }
                 Effect::Review(kind) => {
-                    self.review = Some(ReviewScreen::new(kind, &self.state));
+                    let review = ReviewScreen::new(kind, &self.state);
+                    self.review_info_rx = Some(spawn_review_info(&review, &self.state));
+                    self.review = Some(review);
                     self.screen = Screen::Review;
                 }
                 Effect::CloseReview => {
@@ -976,6 +989,37 @@ fn newer(candidate: &str, current: &str) -> bool {
     let parse =
         |v: &str| -> Vec<u64> { v.split(['.', '-']).map_while(|p| p.parse().ok()).collect() };
     parse(candidate) > parse(current)
+}
+
+/// Descriptions for a review: the local package database for installed
+/// apps, the package sources (network) for cachyup's own entries.
+fn spawn_review_info(review: &ReviewScreen, state: &AppState) -> Receiver<InfoMap> {
+    let (tx, rx) = mpsc::channel();
+    let keys = review.keys();
+    let kind = review.kind();
+    let installed = state.installed.clone();
+    let paths = state.paths.clone();
+    std::thread::spawn(move || {
+        let info = match kind {
+            ReviewKind::Installed => crate::system::installed_info(&keys),
+            ReviewKind::Builtin => {
+                // Only the offered apps, so one AUR request covers them.
+                let builtin = crate::catalog::Catalog::builtin();
+                let subset = crate::catalog::Catalog {
+                    apps: builtin
+                        .apps
+                        .iter()
+                        .filter(|a| keys.contains(&a.key()))
+                        .cloned()
+                        .collect(),
+                    ..Default::default()
+                };
+                fetch_info(&subset, &installed, &paths)
+            }
+        };
+        let _ = tx.send(info);
+    });
+    rx
 }
 
 /// Package descriptions, read in the background and cached.

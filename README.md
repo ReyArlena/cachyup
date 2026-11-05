@@ -89,7 +89,9 @@ Two things can be added to your list without typing, both under Settings:
 - **New in cachyup.** Entries cachyup ships that your list lacks, after an update.
 
 The review screen is a tick list: `Space` ticks one, `a` a group, `A` everything shown,
-`/` filters. Nothing is written until `w`, which appends the ticked entries to
+`/` filters. The line under the list describes the entry under the cursor and `i` opens
+its details (version, origin, install date for installed packages; what the package
+source says for cachyup's entries). Nothing is written until `w`, which appends the ticked entries to
 `apps.toml` (layout and comments kept, the previous copy saved as `apps.toml.bak`),
 switches them on, and marks everything that was on screen as reviewed, so only what is
 installed after that counts as new. Entries from cachyup that you leave unticked are not

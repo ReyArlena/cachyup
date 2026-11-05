@@ -11,12 +11,13 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
 
 use crate::app::AppState;
-use crate::catalog::Source;
+use crate::catalog::{Catalog, Source};
+use crate::system::InfoMap;
 
 use super::Effect;
 use super::input::{Action, Hit, HitMap};
 use super::theme;
-use super::widgets::{Modal, TextInput, clamp_scroll, pane_block};
+use super::widgets::{Button, Modal, TextInput, clamp_scroll, pane_block};
 
 const PANE: usize = 0;
 
@@ -67,6 +68,10 @@ enum Row {
 pub struct ReviewScreen {
     kind: ReviewKind,
     items: Vec<Item>,
+    /// Descriptions and details per key, filled in from a background fetch.
+    info: InfoMap,
+    /// Catalog descriptions for built-in entries, ready at once.
+    builtin: Option<Catalog>,
     ticked: HashSet<String>,
     show_hidden: bool,
     cursor: usize,
@@ -107,13 +112,19 @@ impl ReviewScreen {
                 })
                 .collect(),
         };
-        Self::from_items(kind, items)
+        let mut s = Self::from_items(kind, items);
+        if kind == ReviewKind::Builtin {
+            s.builtin = Some(Catalog::builtin());
+        }
+        s
     }
 
     pub fn from_items(kind: ReviewKind, items: Vec<Item>) -> Self {
         Self {
             kind,
             items,
+            info: InfoMap::new(),
+            builtin: None,
             ticked: HashSet::new(),
             show_hidden: false,
             cursor: 0,
@@ -126,6 +137,72 @@ impl ReviewScreen {
 
     pub fn is_filtering(&self) -> bool {
         self.filtering
+    }
+
+    pub fn kind(&self) -> ReviewKind {
+        self.kind
+    }
+
+    /// Every key on the list, for the info fetch.
+    pub fn keys(&self) -> Vec<String> {
+        self.items.iter().map(|i| i.key.clone()).collect()
+    }
+
+    pub fn set_info(&mut self, info: InfoMap) {
+        self.info = info;
+    }
+
+    /// Catalog text first (built-in entries), then what the source says.
+    fn describe(&self, item: &Item) -> Option<String> {
+        let from_catalog = self.builtin.as_ref().and_then(|b| {
+            if let Some(id) = item.key.strip_prefix("tweak/") {
+                b.tweak(id).and_then(|t| t.description.clone())
+            } else {
+                b.app(&item.key).and_then(|a| a.description.clone())
+            }
+        });
+        from_catalog.or_else(|| self.info.get(&item.key).and_then(|i| i.description.clone()))
+    }
+
+    fn info_modal(&self, item: &Item) -> Modal {
+        let label = |k: &str| Span::styled(format!("{k:<18}"), theme::dim());
+        let mut body = vec![
+            Line::from(self.describe(item).unwrap_or_else(|| {
+                if self.info.is_empty() {
+                    "Reading package info...".into()
+                } else {
+                    "No description".into()
+                }
+            })),
+            Line::from(""),
+            Line::from(vec![label("Entry"), Span::raw(item.key.clone())]),
+        ];
+        if let Some(i) = self.info.get(&item.key) {
+            for (k, v) in &i.details {
+                body.push(Line::from(vec![label(k), Span::raw(v.clone())]));
+            }
+        }
+        if let Some(why) = item.hidden {
+            body.push(Line::from(vec![
+                label("Set aside"),
+                Span::raw(format!("{why}: machine-specific, shown with s")),
+            ]));
+        }
+        Modal::new(
+            &item.label,
+            body,
+            vec![Button::new(
+                &[
+                    KeyCode::Enter,
+                    KeyCode::Esc,
+                    KeyCode::Char('i'),
+                    KeyCode::Char('q'),
+                ],
+                "Enter",
+                "close",
+                None,
+            )],
+        )
     }
 
     pub fn hidden_count(&self) -> usize {
@@ -286,6 +363,11 @@ impl ReviewScreen {
                 let keys = self.visible_keys();
                 self.tick_all(&keys);
             }
+            Action::Char('i') => {
+                if let Some(Row::Item(i)) = rows.get(self.cursor) {
+                    return vec![Effect::Modal(self.info_modal(&self.items[*i]))];
+                }
+            }
             Action::Char('s') => {
                 self.show_hidden = !self.show_hidden;
                 let rows = self.rows();
@@ -349,6 +431,7 @@ impl ReviewScreen {
         }
         let mut hints = vec![
             ("Space", "tick"),
+            ("i", "info"),
             ("a", "group"),
             ("A", "all shown"),
             ("/", "filter"),
@@ -379,7 +462,7 @@ impl ReviewScreen {
         let [filter_area, list_area, help_area] = Layout::vertical([
             Constraint::Length(filter_rows),
             Constraint::Min(1),
-            Constraint::Length(3),
+            Constraint::Length(4),
         ])
         .areas(inner);
         if filter_rows > 0 {
@@ -442,22 +525,30 @@ impl ReviewScreen {
         }
         frame.render_widget(Paragraph::new(lines), list_area);
 
+        // The cursor's description, then the standing summary.
         let shown = self.visible_keys().len();
-        let mut help = format!(
+        let mut lines = Vec::new();
+        if let Some(Row::Item(i)) = rows.get(self.cursor) {
+            let text = match self.describe(&self.items[*i]) {
+                Some(d) => format!("{d}  (i for details)"),
+                None if self.info.is_empty() => "Reading package info...".into(),
+                None => "No description  (i for details)".into(),
+            };
+            lines.push(Line::from(Span::styled(text, theme::help())));
+        }
+        let mut summary = format!(
             "{} ticked of {shown} shown. w adds the ticked ones to apps.toml and marks all shown as reviewed; Esc leaves everything as it was.",
             self.ticked.len()
         );
         if let (ReviewKind::Installed, n) = (self.kind, self.hidden_count())
             && n > 0
         {
-            help.push_str(&format!(
+            summary.push_str(&format!(
                 " {n} machine-specific packages (kernels, drivers, firmware, base system) are set aside; s shows them."
             ));
         }
-        frame.render_widget(
-            Paragraph::new(Span::styled(help, theme::help())).wrap(Wrap { trim: true }),
-            help_area,
-        );
+        lines.push(Line::from(Span::styled(summary, theme::dim())));
+        frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), help_area);
     }
 }
 
@@ -515,6 +606,30 @@ mod tests {
         };
         assert_eq!(r.add, ["pacman/htop"]);
         assert_eq!(r.seen, ["pacman/htop", "aur/spotify"], "hidden not seen");
+    }
+
+    #[test]
+    fn info_shows_in_the_popup_once_fetched() {
+        let hits = HitMap::default();
+        let mut s = screen();
+        let mut info = InfoMap::new();
+        info.insert(
+            "pacman/htop".into(),
+            crate::system::PackageInfo {
+                available: Some(true),
+                description: Some("Interactive process viewer".into()),
+                details: vec![("Installed version".into(), "3.4.1-1".into())],
+            },
+        );
+        s.set_info(info);
+        assert_eq!(
+            s.describe(&s.items[0]).as_deref(),
+            Some("Interactive process viewer")
+        );
+        assert!(matches!(
+            s.handle(Action::Char('i'), &hits)[..],
+            [Effect::Modal(_)]
+        ));
     }
 
     #[test]
