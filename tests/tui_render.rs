@@ -176,3 +176,14 @@ fn descriptions_show_under_each_entry() {
     app.key_for_test(key(KeyCode::Char('I')));
     assert!(!render(&mut app, 120, 30).contains("Stop Discord"));
 }
+
+#[test]
+fn help_names_the_apps_file_and_the_edit_key() {
+    let (_dir, state) = sandbox();
+    let mut app = App::new(state, false, false);
+    app.key_for_test(key(KeyCode::Char('?')));
+    let text = render(&mut app, 120, 40);
+    assert!(text.contains("Your files"), "{text}");
+    assert!(text.contains("apps.toml"), "{text}");
+    assert!(text.contains("edit the app list"), "{text}");
+}

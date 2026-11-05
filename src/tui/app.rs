@@ -32,6 +32,8 @@ pub enum Exit {
     Quit,
     /// Step aside so sudo can ask for the password, then come back.
     Authenticate,
+    /// Step aside so the user's editor can open apps.toml, then reload.
+    Edit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,17 +77,7 @@ impl App {
         startup.extend(startup_modals(&state));
 
         let info = load_info_cache(&state.paths.info_cache());
-        let (info_tx, info_rx) = mpsc::channel();
-        {
-            let catalog = state.catalog.clone();
-            let installed = state.installed.clone();
-            let paths = state.paths.clone();
-            std::thread::spawn(move || {
-                let info = fetch_info(&catalog, &installed, &paths);
-                save_info_cache(&paths.info_cache(), &info);
-                let _ = info_tx.send(info);
-            });
-        }
+        let info_rx = spawn_info_fetch(&state);
         let update_rx = state.config.settings.update_check.then(|| {
             let (tx, rx) = mpsc::channel();
             std::thread::spawn(move || {
@@ -156,6 +148,23 @@ impl App {
             }
             self.poll_background();
         }
+    }
+
+    /// Back from the editor: everything re-read from disk. Any problem with
+    /// the edited file comes up as a popup, like at launch.
+    pub fn reload(&mut self, state: AppState) {
+        self.startup.extend(startup_modals(&state));
+        self.info_rx = Some(spawn_info_fetch(&state));
+        self.main = MainScreen::new(&state);
+        self.state = state;
+        if self.modal.is_none() {
+            self.modal = self.startup.pop_front();
+        }
+    }
+
+    /// A short message in the corner, from outside the event loop.
+    pub fn notify(&mut self, text: &str) {
+        self.toast(text);
     }
 
     /// Back from the sudo prompt.
@@ -260,6 +269,13 @@ impl App {
             }
             if self.help {
                 self.help = false;
+                if key.code == KeyCode::Char('e') {
+                    if self.run.is_some() {
+                        self.toast("wait for the run to finish before editing");
+                    } else {
+                        self.exit = Some(Exit::Edit);
+                    }
+                }
                 return;
             }
             if self.screen == Screen::Main && self.main.is_filtering() {
@@ -621,7 +637,8 @@ impl App {
             }
         }
         if self.help {
-            draw_help(frame, area, &keys);
+            let apps_file = self.state.paths.tilde(&self.state.paths.apps_file());
+            draw_help(frame, area, &keys, &apps_file);
         }
         if let Some(modal) = &mut self.modal {
             modal.draw(frame, area);
@@ -808,6 +825,20 @@ fn newer(candidate: &str, current: &str) -> bool {
     let parse =
         |v: &str| -> Vec<u64> { v.split(['.', '-']).map_while(|p| p.parse().ok()).collect() };
     parse(candidate) > parse(current)
+}
+
+/// Package descriptions, read in the background and cached.
+fn spawn_info_fetch(state: &AppState) -> Receiver<InfoMap> {
+    let (tx, rx) = mpsc::channel();
+    let catalog = state.catalog.clone();
+    let installed = state.installed.clone();
+    let paths = state.paths.clone();
+    std::thread::spawn(move || {
+        let info = fetch_info(&catalog, &installed, &paths);
+        save_info_cache(&paths.info_cache(), &info);
+        let _ = tx.send(info);
+    });
+    rx
 }
 
 fn open_url(url: &str) {

@@ -578,7 +578,8 @@ fn status_in_line(line: &str) -> Option<Status> {
 }
 
 /// Full-screen help overlay.
-pub fn draw_help(frame: &mut Frame, area: Rect, screen_keys: &[(&str, &str)]) {
+/// `apps_file` is shown as the place to edit the app list; `e` opens it.
+pub fn draw_help(frame: &mut Frame, area: Rect, screen_keys: &[(&str, &str)], apps_file: &str) {
     let mut lines = vec![
         Line::from(Span::styled("Moving around", theme::title())),
         Line::from("  Arrows / h j k l    move, scroll"),
@@ -596,8 +597,17 @@ pub fn draw_help(frame: &mut Frame, area: Rect, screen_keys: &[(&str, &str)]) {
         lines.push(Line::from(format!("  {k:<7} {label}")));
     }
     lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("Your files", theme::title())));
+    lines.push(Line::from(format!("  {apps_file}")));
+    lines.push(Line::from(
+        "  the app list; config.toml next to it holds the settings",
+    ));
+    lines.push(Line::from(
+        "  e       edit the app list ($VISUAL, $EDITOR or xdg-open)",
+    ));
+    lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "Press any key to close",
+        "Any other key closes this",
         theme::dim(),
     )));
     let rect = centered(area, 64, lines.len() as u16 + 2);

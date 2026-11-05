@@ -59,7 +59,9 @@ whole session, so a long AUR build never stops at a password prompt.
 The left pane lists the three tasks; `Space` switches one on or off. The right pane shows
 the highlighted task's options. Press `c` (or `Enter`, `Tab`, `→`/`l`) to move into them,
 and `Esc` (or `←`/`h`) to come back. Arrows and `h` `j` `k` `l` move everywhere, `?` lists
-the keys for the current screen. Changes are saved as you make them.
+the keys for the current screen and where your files are; `e` from there opens the app
+list in `$VISUAL` or `$EDITOR` (or with `xdg-open`) and re-reads it when you are done.
+Changes are saved as you make them.
 
 | Task | Options |
 |------|---------|

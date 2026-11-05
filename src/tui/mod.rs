@@ -58,7 +58,7 @@ pub fn run(paths: Paths, dry_only: bool) -> Result<i32> {
     } else {
         crate::sudo::ensure(true)
     };
-    let state = AppState::load(paths)?;
+    let state = AppState::load(paths.clone())?;
 
     let paused = Arc::new(AtomicBool::new(false));
     let (tx, rx) = mpsc::channel();
@@ -84,7 +84,55 @@ pub fn run(paths: Paths, dry_only: bool) -> Result<i32> {
                 paused.store(false, Ordering::SeqCst);
                 app.authenticated(ok);
             }
+            app::Exit::Edit => {
+                paused.store(true, Ordering::SeqCst);
+                std::thread::sleep(Duration::from_millis(150));
+                while rx.try_recv().is_ok() {}
+                let note = edit_file(&paths.apps_file());
+                while rx.try_recv().is_ok() {}
+                paused.store(false, Ordering::SeqCst);
+                match AppState::load(paths.clone()) {
+                    Ok(state) => app.reload(state),
+                    Err(e) => app.notify(&format!("could not reload: {e:#}")),
+                }
+                if let Some(note) = note {
+                    app.notify(&note);
+                }
+            }
         }
+    }
+}
+
+/// Open a file in the user's editor and wait for it: `$VISUAL`, then
+/// `$EDITOR`, then `xdg-open` (which returns at once, so we wait for Enter).
+/// Returns a note for the user when something went wrong.
+fn edit_file(path: &std::path::Path) -> Option<String> {
+    let editor = ["VISUAL", "EDITOR"]
+        .iter()
+        .filter_map(|v| std::env::var(v).ok())
+        .find(|v| !v.trim().is_empty());
+    let Some(editor) = editor else {
+        println!(
+            "No $VISUAL or $EDITOR set; opening {} with xdg-open.",
+            path.display()
+        );
+        println!("Press Enter here when you are done editing.");
+        let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+        let mut line = String::new();
+        let _ = std::io::stdin().read_line(&mut line);
+        return None;
+    };
+    // `$EDITOR` may carry arguments ("code --wait").
+    let mut parts = editor.split_whitespace();
+    let program = parts.next()?;
+    let status = std::process::Command::new(program)
+        .args(parts)
+        .arg(path)
+        .status();
+    match status {
+        Ok(s) if s.success() => None,
+        Ok(s) => Some(format!("{program} exited with {s}")),
+        Err(e) => Some(format!("could not start {program}: {e}")),
     }
 }
 

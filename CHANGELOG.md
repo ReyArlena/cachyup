@@ -24,6 +24,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `install.sh --apps URL|path` to start from your own apps file.
 - `A` in the app list switches everything shown on, or off again.
+- The help popup (`?`) names your files; `e` there opens `apps.toml` in `$VISUAL`,
+  `$EDITOR` or `xdg-open`, and the list is re-read afterwards.
 
 ### Changed
 
