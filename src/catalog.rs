@@ -122,7 +122,18 @@ pub struct Tweak {
     /// Packages installed before `sets` are written (optional dependencies).
     pub installs: Vec<Package>,
     pub sets: Vec<SetOp>,
+    /// A shell command run after `sets`, guarded by its own check.
+    pub run: Option<RunOp>,
     pub origin: Origin,
+}
+
+/// A tweak step done by a shell command. `check` decides whether it is
+/// already in place; `run` applies it. Both run with `bash -c`, as the user.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RunOp {
+    /// Exit 0 means applied. Runs for real in a dry run, so it must change nothing.
+    pub check: String,
+    pub run: String,
 }
 
 /// A package a tweak installs, from any package source.
@@ -434,6 +445,8 @@ struct TweakDef {
     installs: Vec<String>,
     #[serde(default)]
     set: Vec<SetDef>,
+    check: Option<String>,
+    run: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -448,8 +461,18 @@ struct SetDef {
 
 impl TweakDef {
     fn into_tweak(self, origin: Origin) -> Result<Tweak> {
-        if self.set.is_empty() && self.installs.is_empty() {
-            bail!("tweak {}: needs `installs` or at least one `set`", self.id);
+        let run = match (self.check, self.run) {
+            (Some(check), Some(run)) if !check.trim().is_empty() && !run.trim().is_empty() => {
+                Some(RunOp { check, run })
+            }
+            (None, None) => None,
+            _ => bail!("tweak {}: `run` and `check` go together", self.id),
+        };
+        if self.set.is_empty() && self.installs.is_empty() && run.is_none() {
+            bail!(
+                "tweak {}: needs `installs`, at least one `set`, or `run` with `check`",
+                self.id
+            );
         }
         let installs = self
             .installs
@@ -491,6 +514,7 @@ impl TweakDef {
             default: self.default,
             installs,
             sets,
+            run,
             origin,
         })
     }
@@ -544,6 +568,27 @@ mod tests {
         .unwrap();
         let def = file.tweak.into_iter().next().unwrap();
         assert!(def.into_tweak(Origin::Builtin).is_err());
+    }
+
+    #[test]
+    fn run_tweaks_need_a_check() {
+        let parse = |body: &str| -> Result<Tweak> {
+            let file: CatalogFile =
+                toml::from_str(&format!("[[tweak]]\nid = \"t\"\nname = \"t\"\n{body}")).unwrap();
+            file.tweak
+                .into_iter()
+                .next()
+                .unwrap()
+                .into_tweak(Origin::User)
+        };
+        let t = parse("check = \"true\"\nrun = \"echo hi\"").unwrap();
+        assert_eq!(t.run.as_ref().map(|r| r.run.as_str()), Some("echo hi"));
+        assert!(t.sets.is_empty());
+        assert!(parse("run = \"echo hi\"").is_err());
+        assert!(parse("check = \"true\"").is_err());
+        assert!(parse("check = \"\"\nrun = \"echo hi\"").is_err());
+        let t = parse("installs = [\"htop\"]").unwrap();
+        assert!(t.run.is_none());
     }
 
     #[test]

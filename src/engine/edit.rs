@@ -148,6 +148,10 @@ pub fn tweak_applied(tweak: &Tweak, paths: &Paths, installed: &Installed) -> boo
         .iter()
         .all(|p| installed.package(p.source, &p.name) == Some(true))
         && tweak.sets.iter().all(|op| op_applied(op, paths))
+        && tweak
+            .run
+            .as_ref()
+            .is_none_or(|r| crate::system::check_passes(&r.check))
 }
 
 /// What the file holds now for the first value of a tweak that is not in
@@ -256,6 +260,7 @@ mod tests {
             unless_cmd: None,
             default: None,
             installs: vec![],
+            run: None,
             sets: vec![SetOp::Ini {
                 file: "~/mimeapps.list".into(),
                 section: "Default Applications".into(),

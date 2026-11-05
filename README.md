@@ -143,7 +143,7 @@ app off never uninstalls it.
 ### Adding your own
 
 Create `~/.config/cachyup/user-apps.toml`. Same layout as cachyup's own
-[`catalog.toml`](catalog.toml):
+[`catalog.toml`](catalog.toml). Everything in it is optional; a short file is fine:
 
 ```toml
 pacman = ["htop", "btop"]
@@ -171,12 +171,111 @@ set = [
 
 Your entries start switched on the first time they are seen. An entry that repeats one of
 cachyup's own is ignored, and a popup at launch says so. So does a name listed under two
-sources, or a file that does not parse.
+sources, a tweak whose `app` is not in the list, or a file that does not parse. The user
+file only adds: it cannot change or hide a built-in entry, and `prerequisites` is ignored
+in it.
 
-Tweak values are written with `{ json = FILE, key = "a.b", value = ... }` (a dotted JSON
-key) or `{ ini = FILE, section = "S", key = "k", value = "v" }`. Files are written through
-symlinks, so a stow-managed dotfile stays a symlink and the change lands in your dotfiles
-repo.
+#### Packages
+
+Three lists, one per source. Each entry is a bare name or a table with extras:
+
+```toml
+pacman = ["htop", { name = "junction", unless_cmd = "dms" }]
+aur = ["pfetch", { name = "foo-git", default = false, description = "Not for everyone" }]
+flatpak = ["org.gnome.Chess"]
+```
+
+| Key | Meaning |
+|-----|---------|
+| `name` | Package name (`pacman`, `aur`) or application id (`flatpak`). Required. |
+| `description` | One line under the entry. Otherwise read from the package source. |
+| `default` | `true` or `false`: on or off the first time it is seen. Default on. |
+| `unless_cmd` | Off by default while this command exists (`"dms"`, `"/usr/bin/foo"`). |
+
+Pacman names are checked against the repos, AUR names against the AUR, flatpak ids
+against Flathub. An unknown name shows as Unavailable and is skipped in a run.
+
+#### Installers
+
+Apps with their own install script. Each one is checked, installed, and checked again:
+
+```toml
+[[installer]]
+name = "claude"
+label = "Claude Code"
+description = "Anthropic's coding agent (~/.local/bin/claude)"
+check = "~/.local/bin/claude"
+install = "curl -fsSL https://claude.ai/install.sh | bash"
+```
+
+| Key | Meaning |
+|-----|---------|
+| `name` | Short id, used in the selection file as `installer/name`. Required. |
+| `label` | Display name when it should differ from `name`. |
+| `description` | One line under the entry. |
+| `check` | A path (`~` allowed) or a command name on PATH. Present means installed. Required. |
+| `install` | Shell command run with `bash -c` as you, only while `check` fails. Required. |
+| `default`, `unless_cmd` | As for packages. |
+
+Installers never get sudo. A script that needs it fails rather than prompts.
+
+#### Tweaks
+
+A tweak is a small change tied to an app: optional packages, values written into config
+files, a command, or any mix. It needs at least one of `installs`, `set`, or `run`. The
+three happen in that order, and each part is skipped while it is already in place:
+
+```toml
+[[tweak]]
+id = "dux-files-default"
+app = "aur/dux-files-git"
+name = "Set Dux Files as default"
+description = "Make Dux Files the default file manager."
+installs = ["gvfs", "aur/foo-git", "flatpak/org.example.App"]
+set = [
+    {
+        ini = "~/.config/mimeapps.list",
+        section = "Default Applications",
+        key = "inode/directory",
+        value = "dev.duxlabs.files.desktop",
+    },
+    {
+        json = "~/.config/foo/settings.json",
+        key = "ui.theme",
+        value = "dark",
+    },
+]
+check = "test \"$(xdg-mime query default inode/directory)\" = dev.duxlabs.files.desktop"
+run = "xdg-mime default dev.duxlabs.files.desktop inode/directory"
+```
+
+| Key | Meaning |
+|-----|---------|
+| `id` | Unique id, used in the selection file. Required. |
+| `name` | Shown in the list. Required. |
+| `app` | Key of the app it belongs to: `pacman/htop`, `aur/foo`, `flatpak/org.x.App`, `installer/my-tool`. Shown under that app and skipped while it is not installed. Without it the tweak stands alone. |
+| `description` | One line under the entry. |
+| `installs` | Packages installed first. Bare names are pacman; `aur/name` and `flatpak/id` for the others. |
+| `set` | Values written into config files, each a table with `json` or `ini` (see below). |
+| `check` | Shell command, exit 0 means `run` has been done. Required with `run`. |
+| `run` | Shell command run with `bash -c` as you, only while `check` fails. |
+| `default`, `unless_cmd` | As for packages. |
+
+Each `set` entry writes one value and is skipped when the file already holds it:
+
+| Shape | Writes |
+|-------|--------|
+| `{ json = FILE, key = "a.b", value = V }` | A JSON key, dotted path for nesting. `value` keeps its type (`true`, `3`, `"text"`). The file is created if missing and other keys are left alone. |
+| `{ ini = FILE, section = "S", key = "k", value = "v" }` | A `key=value` line under `[S]` in an ini-style file (`mimeapps.list`, `htoprc`). Replaces the line if it exists, otherwise appends it. |
+
+Files are written through symlinks, so a stow-managed dotfile stays a symlink and the
+change lands in your dotfiles repo. Tables can span lines with a trailing comma (TOML 1.1).
+
+`check` and `run` cover what no file write can: `gsettings set`, `systemctl --user enable`,
+`flatpak override`, `xdg-mime default`. `check` runs for real in a dry run and at launch
+(for the Applied / Not applied status), so it must change nothing and finish quickly. A
+run reports `FAILED` when `run` exits non-zero or `check` still fails afterwards. Neither
+gets sudo.
 
 Descriptions come from the package sources: `pacman -Si` for repo packages, the AUR web
 API, and the flathub listing. They are cached in `~/.cache/cachyup/info.json`, so the list

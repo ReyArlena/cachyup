@@ -427,7 +427,14 @@ fn apply_tweak(cx: &mut Ctx, tweak: &Tweak, app: Option<&App>, app_queued: bool)
             .iter()
             .all(|p| package_installed(cx, p.source, &p.name))
     };
-    if all_installed(cx) && tweak.sets.iter().all(|op| op_applied(op, &paths)) {
+    let run_applied = |tweak: &Tweak| {
+        tweak
+            .run
+            .as_ref()
+            .is_none_or(|r| crate::system::check_passes(&r.check))
+    };
+    if all_installed(cx) && tweak.sets.iter().all(|op| op_applied(op, &paths)) && run_applied(tweak)
+    {
         return Outcome::skipped("already applied");
     }
     // Optional packages first: each one checked, installed, checked again.
@@ -455,14 +462,23 @@ fn apply_tweak(cx: &mut Ctx, tweak: &Tweak, app: Option<&App>, app_queued: bool)
             return Outcome::failed(format!("{what}: {reason}"));
         }
     }
+    // The shell command last, only while its check still fails.
+    if let Some(r) = &tweak.run
+        && !crate::system::check_passes(&r.check)
+        && let Err(reason) = cx.exec(&Cmd::new("bash", &["-c", &r.run]))
+    {
+        return Outcome::failed(reason);
+    }
     if cx.dry {
         return done(cx);
     }
-    if all_installed(cx) && tweak.sets.iter().all(|op| op_applied(op, &paths)) {
-        Outcome::success()
-    } else {
-        Outcome::failed("value did not stick")
+    if !all_installed(cx) || !tweak.sets.iter().all(|op| op_applied(op, &paths)) {
+        return Outcome::failed("value did not stick");
     }
+    if !run_applied(tweak) {
+        return Outcome::failed("check still fails after run");
+    }
+    Outcome::success()
 }
 
 fn apply_op(op: &SetOp, paths: &crate::paths::Paths) -> anyhow::Result<()> {
@@ -883,6 +899,67 @@ mod tests {
         assert!(is_prebuilt("pycharm-professional"));
         assert!(is_prebuilt("spotify"));
         assert!(!is_prebuilt("openttd-jgrpp"));
+    }
+
+    fn run_tweak(dir: &std::path::Path, check: &str, run: &str) -> Tweak {
+        Tweak {
+            id: "t".into(),
+            app: None,
+            name: "t".into(),
+            description: None,
+            unless_cmd: None,
+            default: None,
+            installs: vec![],
+            sets: vec![],
+            run: Some(crate::catalog::RunOp {
+                check: check.replace("DIR", &dir.display().to_string()),
+                run: run.replace("DIR", &dir.display().to_string()),
+            }),
+            origin: crate::catalog::Origin::User,
+        }
+    }
+
+    fn ctx(dry: bool, dir: &std::path::Path) -> Ctx {
+        let (tx, _rx) = std::sync::mpsc::channel();
+        Ctx::new(
+            dry,
+            crate::paths::Paths::under(dir),
+            crate::config::Settings::default(),
+            std::sync::Arc::new(super::super::ctx::Control::default()),
+            tx,
+            None,
+        )
+    }
+
+    #[test]
+    fn run_tweak_is_guarded_by_its_check() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join("done");
+        let tweak = run_tweak(dir.path(), "test -e DIR/done", "touch DIR/done");
+
+        // A dry run checks for real and only logs the command.
+        let out = apply_tweak(&mut ctx(true, dir.path()), &tweak, None, false);
+        assert_eq!(out.status, Status::Would);
+        assert!(!marker.exists());
+
+        let out = apply_tweak(&mut ctx(false, dir.path()), &tweak, None, false);
+        assert_eq!(out.status, Status::Success, "{:?}", out.reason);
+        assert!(marker.exists());
+
+        let out = apply_tweak(&mut ctx(false, dir.path()), &tweak, None, false);
+        assert_eq!(out.status, Status::Skipped);
+        assert_eq!(out.reason.as_deref(), Some("already applied"));
+
+        // The command ran but the check still fails: that is a failure.
+        let tweak = run_tweak(dir.path(), "false", "true");
+        let out = apply_tweak(&mut ctx(false, dir.path()), &tweak, None, false);
+        assert_eq!(out.status, Status::Failed);
+        assert_eq!(out.reason.as_deref(), Some("check still fails after run"));
+
+        // A failing command reports its exit status.
+        let tweak = run_tweak(dir.path(), "false", "exit 7");
+        let out = apply_tweak(&mut ctx(false, dir.path()), &tweak, None, false);
+        assert_eq!(out.status, Status::Failed);
     }
 
     #[test]

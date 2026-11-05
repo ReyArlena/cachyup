@@ -734,6 +734,10 @@ impl MainScreen {
                         }
                     }));
                 }
+                if let Some(r) = &t.run {
+                    body.push(Line::from(format!("  run: {}", r.run)));
+                    body.push(Line::from(format!("  unless: {}", r.check)));
+                }
                 Some(Modal::new(
                     &t.name,
                     body,

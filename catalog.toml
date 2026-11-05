@@ -192,13 +192,20 @@ check = "~/.local/bin/spotify-url-helper"
 install = "curl -fsSL https://raw.githubusercontent.com/ReyArlena/spotify-url-helper/main/install.sh | sh"
 
 # Config tweaks. `app` ties a tweak to an app (shown under it in the app list,
-# skipped while that app is not installed). A tweak needs `installs`, `set`,
-# or both. `installs` lists optional packages, installed before `set`:
+# skipped while that app is not installed). A tweak needs at least one of
+# `installs`, `set`, or `run`, done in that order. `installs` lists optional
+# packages:
 #   installs = ["poppler", "aur/foo-git", "flatpak/org.example.App"]   bare = pacman
 # Each `set` entry writes one value:
 #   { json = FILE, key = "a.b", value = ... }                  JSON key (dotted path)
 #   { ini = FILE, section = "S", key = "k", value = "v" }      ini-style key
 # Files are written through symlinks, so stow-managed dotfiles stay links.
+# `run` is a shell command (bash -c, as the user) for what no file write can
+# do. It needs `check`: a command whose exit 0 means it is done. `check` runs
+# for real in a dry run and at launch, so it must change nothing:
+#   check = "test \"$(xdg-mime query default inode/directory)\" = foo.desktop"
+#   run = "xdg-mime default foo.desktop inode/directory"
+# Prefer `set` when the value lives in a file: it can show what is there now.
 [[tweak]]
 id = "discord-skip-host-update"
 app = "pacman/discord"

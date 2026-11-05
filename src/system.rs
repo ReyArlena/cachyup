@@ -116,6 +116,18 @@ impl Installed {
     }
 }
 
+/// A tweak's `check`: a shell command whose exit status 0 means applied.
+/// Output is discarded; stdin is closed so nothing can wait for input.
+pub fn check_passes(check: &str) -> bool {
+    Command::new("bash")
+        .args(["-c", check])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
 /// An installer's `check`: a path (`~` allowed) or a command name.
 pub fn installer_present(check: &str, paths: &Paths) -> bool {
     if check.starts_with('~') || check.contains('/') {
