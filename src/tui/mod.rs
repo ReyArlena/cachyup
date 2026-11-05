@@ -45,6 +45,8 @@ pub enum Effect {
     AskRun,
     /// Show the stop-the-run choice.
     AskStop,
+    /// `u` on an app: confirm removing it.
+    AskUninstall(String),
     /// Leave a finished run.
     CloseRun,
     History,

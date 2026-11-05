@@ -37,6 +37,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   merges them into `apps.toml` with its layout kept (previous copy in `apps.toml.bak`)
   and switches them on; `Esc` discards. Reviewed entries are not offered again. A launch
   popup counts what is waiting. Each entry shows its description, `i` its details.
+- `u` in the app list uninstalls an app: a confirmation shows the command (`pacman -Rns
+  --noconfirm` or `flatpak uninstall`, `c` copies it), then it runs as a one-step run and
+  the app is switched off so the next run does not reinstall it. Not for install-script
+  apps.
 - The help popup (`?`) names your files; `e` there opens `apps.toml` in `$VISUAL`,
   `$EDITOR` or `xdg-open`, and the list is re-read afterwards.
 

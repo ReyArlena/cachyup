@@ -544,6 +544,11 @@ impl MainScreen {
             Action::Char('A') if self.current().lists_apps() => {
                 return self.toggle_all(&rows, app);
             }
+            Action::Char('u') if self.current() == Task::Apps => {
+                if let Some(Row::App(key)) = rows.get(self.cursor[self.task]) {
+                    return vec![Effect::AskUninstall(key.clone())];
+                }
+            }
             Action::Toggle | Action::Confirm => {
                 if let Some(row) = rows.get(self.cursor[self.task]).cloned() {
                     return self.toggle(&row, app);
@@ -897,6 +902,7 @@ impl MainScreen {
                     ("I", "descriptions"),
                     ("a", "all in group"),
                     ("A", "all"),
+                    ("u", "uninstall"),
                     ("/", "filter"),
                 ]),
                 Task::Tweaks => hints.extend([

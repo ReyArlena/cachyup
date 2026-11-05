@@ -70,6 +70,8 @@ pub struct App {
     dry_only: bool,
     /// A real run waiting for sudo.
     pending_run: bool,
+    /// An uninstall (app key) waiting for sudo.
+    pending_uninstall: Option<String>,
     exit: Option<Exit>,
     /// Whether the terminal currently sends mouse events to us. Off while a
     /// popup is open, so its text can be selected and copied normally.
@@ -114,6 +116,7 @@ impl App {
             sudo,
             dry_only,
             pending_run: false,
+            pending_uninstall: None,
             exit: None,
             mouse_on: true,
             state,
@@ -248,6 +251,13 @@ impl App {
                 self.start(false);
             } else {
                 self.toast("sudo failed: run cancelled");
+            }
+        }
+        if let Some(key) = self.pending_uninstall.take() {
+            if ok {
+                self.start_uninstall(&key);
+            } else {
+                self.toast("sudo failed: nothing uninstalled");
             }
         }
     }
@@ -455,6 +465,10 @@ impl App {
                 }
             }
             "open-release" => open_url(RELEASES_URL),
+            tag if tag.starts_with("uninstall:") => {
+                let key = tag["uninstall:".len()..].to_string();
+                self.start_uninstall(&key);
+            }
             "delete-run" => {
                 let effects = self.history.delete_current(&self.state.paths.runs_dir());
                 self.apply(effects);
@@ -486,6 +500,7 @@ impl App {
                     }
                 }
                 Effect::AskRun => self.ask_run(),
+                Effect::AskUninstall(key) => self.ask_uninstall(&key),
                 Effect::AskStop => {
                     self.modal = Some(Modal::new(
                         "Stop the run?",
@@ -666,6 +681,86 @@ impl App {
             ]
         };
         self.modal = Some(Modal::new("Run", body, buttons));
+    }
+
+    /// `u`: the confirmation, with the command it would run.
+    fn ask_uninstall(&mut self, key: &str) {
+        let Some(app) = self.state.catalog.app(key) else {
+            return;
+        };
+        if self.dry_only {
+            self.toast("started with --dry-run: nothing is uninstalled");
+            return;
+        }
+        if self.run.is_some() {
+            self.toast("wait for the run to finish");
+            return;
+        }
+        let name = app.display_name().to_string();
+        let Some(cmd) = crate::engine::plan::uninstall_cmd(app) else {
+            self.toast(&format!(
+                "{name} came from an install script; switch it off and remove it by hand"
+            ));
+            return;
+        };
+        if self.state.is_installed(app) != Some(true) {
+            self.toast(&format!("{name} is not installed"));
+            return;
+        }
+        let cmd = cmd.display();
+        let text = format!(
+            "This runs:\n\n  {cmd}\n\nand switches {name} off in cachyup, so the next run does not put it back.\n\nTo do it by hand instead, run the command above (c copies it)."
+        );
+        self.modal = Some(
+            Modal::new(
+                &format!("Uninstall {name}?"),
+                Modal::text(&text),
+                vec![
+                    Button::new(
+                        &[KeyCode::Enter],
+                        "Enter",
+                        "uninstall",
+                        Some(&format!("uninstall:{key}")),
+                    ),
+                    Button::new(&[KeyCode::Esc, KeyCode::Char('n')], "Esc", "cancel", None),
+                ],
+            )
+            .with_copy(cmd),
+        );
+    }
+
+    /// Confirmed: switch the app off, then run the one-step plan like any
+    /// other run (streamed, logged, in the history).
+    fn start_uninstall(&mut self, key: &str) {
+        let Some(app) = self.state.catalog.app(key).cloned() else {
+            return;
+        };
+        let needs_sudo = crate::engine::plan::uninstall_cmd(&app).is_some_and(|c| c.sudo);
+        if needs_sudo && !self.sudo {
+            if crate::sudo::has_ticket() {
+                self.sudo = true;
+                crate::sudo::keep_alive();
+            } else {
+                self.pending_uninstall = Some(key.to_string());
+                self.exit = Some(Exit::Authenticate);
+                return;
+            }
+        }
+        self.state.set_app(key, false);
+        if let Err(e) = self.state.save_selection().and(self.state.save_state()) {
+            self.toast(&format!("could not save: {e:#}"));
+        }
+        let plan = crate::engine::plan::uninstall_plan(&app);
+        self.run_screen = RunScreen::new(&plan, false);
+        self.run = Some(start_run(
+            plan,
+            RunOptions {
+                dry: false,
+                paths: self.state.paths.clone(),
+                settings: self.state.config.settings.clone(),
+            },
+        ));
+        self.screen = Screen::Run;
     }
 
     fn start(&mut self, dry: bool) {

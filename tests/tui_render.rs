@@ -96,6 +96,17 @@ fn app_list_shows_packages_tweaks_and_status() {
     assert!(text.contains("Package"), "{text}");
     app.key_for_test(key(KeyCode::Esc));
     render(&mut app, 120, 40);
+
+    // Uninstall: a confirmation naming the command when discord is
+    // installed here, a toast otherwise. Never started from a test.
+    app.key_for_test(key(KeyCode::Char('u')));
+    let text = render(&mut app, 120, 40);
+    assert!(
+        text.contains("pacman -Rns --noconfirm discord") || text.contains("not installed"),
+        "{text}"
+    );
+    app.key_for_test(key(KeyCode::Esc));
+    assert_eq!(app.screen_name_for_test(), "main");
 }
 
 #[test]

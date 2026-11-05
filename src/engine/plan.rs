@@ -6,6 +6,7 @@ use crate::catalog::{Catalog, Source};
 use crate::config::Config;
 
 use super::steps;
+pub use super::steps::uninstall_cmd;
 use super::{Ctx, Outcome};
 
 pub type Body = Box<dyn FnOnce(&mut Ctx) -> Outcome + Send>;
@@ -60,6 +61,7 @@ impl Plan {
 }
 
 pub const GROUP_PREFLIGHT: &str = "Preflight";
+pub const GROUP_UNINSTALL: &str = "Uninstall";
 pub const GROUP_UPDATE: &str = "System update";
 pub const GROUP_PREREQ: &str = "Prerequisites";
 pub const GROUP_TWEAKS: &str = "Tweaks";
@@ -141,6 +143,16 @@ pub fn build_plan(catalog: &Catalog, config: &Config, dry: bool) -> Plan {
     plan
 }
 
+/// A run of one step: remove `app`. Empty for an installer app.
+pub fn uninstall_plan(app: &crate::catalog::App) -> Plan {
+    let mut plan = Plan {
+        steps: Vec::new(),
+        tasks: vec![format!("Uninstall {}", app.display_name())],
+    };
+    steps::uninstall(&mut plan.steps, app.clone());
+    plan
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,6 +212,19 @@ mod tests {
         let n = names(&plan);
         assert!(!n.iter().any(|s| s.starts_with("Cleanup:")));
         assert!(n.iter().any(|s| s.starts_with("Prerequisites")));
+    }
+
+    #[test]
+    fn uninstall_plan_has_one_step_except_for_installers() {
+        let catalog = Catalog::builtin();
+        let plan = uninstall_plan(catalog.app("pacman/discord").unwrap());
+        assert_eq!(names(&plan), ["Uninstall: Uninstall discord"]);
+        let plan = uninstall_plan(catalog.app("flatpak/org.inkscape.Inkscape").unwrap());
+        assert_eq!(plan.steps.len(), 1);
+        let plan = uninstall_plan(catalog.app("installer/claude").unwrap());
+        assert!(plan.steps.is_empty());
+        let cmd = steps::uninstall_cmd(catalog.app("aur/spotify").unwrap()).unwrap();
+        assert_eq!(cmd.display(), "sudo pacman -Rns --noconfirm spotify");
     }
 
     #[test]

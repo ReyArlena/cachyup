@@ -12,7 +12,8 @@ use crate::system::{capture_any, has_cmd, installer_present};
 
 use super::edit::{ini_set, json_set, op_applied};
 use super::plan::{
-    GROUP_CHECKS, GROUP_CLEANUP, GROUP_PREFLIGHT, GROUP_PREREQ, GROUP_TWEAKS, GROUP_UPDATE, Step,
+    GROUP_CHECKS, GROUP_CLEANUP, GROUP_PREFLIGHT, GROUP_PREREQ, GROUP_TWEAKS, GROUP_UNINSTALL,
+    GROUP_UPDATE, Step,
 };
 use super::{Cmd, Ctx, Outcome, Status};
 
@@ -401,6 +402,42 @@ fn run_installer(cx: &mut Ctx, app: &App) -> Outcome {
                 .unwrap_or_else(|| format!("{} still missing", installer.check)),
         )
     }
+}
+
+/// The command that removes an app, for the confirmation popup and the
+/// step. `None` for installers: a script put it there, no script takes it
+/// away.
+pub fn uninstall_cmd(app: &App) -> Option<Cmd> {
+    Some(match app.source {
+        Source::Pacman | Source::Aur => Cmd::sudo("pacman", &["-Rns", "--noconfirm", &app.name]),
+        Source::Flatpak => Cmd::new(
+            "flatpak",
+            &["uninstall", "-y", "--noninteractive", &app.name],
+        ),
+        Source::Installer => return None,
+    })
+}
+
+/// `u` in the app list: one step that removes the app and checks it is gone.
+pub fn uninstall(s: &mut Vec<Step>, app: App) {
+    let Some(cmd) = uninstall_cmd(&app) else {
+        return;
+    };
+    let label = format!("Uninstall {}", app.display_name());
+    s.push(Step::new(GROUP_UNINSTALL, label, move |cx| {
+        if !package_installed(cx, app.source, &app.name) {
+            return Outcome::skipped("not installed");
+        }
+        let result = cx.exec(&cmd);
+        if cx.dry {
+            return done(cx);
+        }
+        if package_installed(cx, app.source, &app.name) {
+            Outcome::failed(result.err().unwrap_or_else(|| "still installed".into()))
+        } else {
+            Outcome::success()
+        }
+    }));
 }
 
 // --- tweaks ---
