@@ -24,6 +24,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `install.sh --apps URL|path` to start from your own apps file.
 - `A` in the app list switches everything shown on, or off again.
+- The app list says "Installed, will update" when the full system update as configured
+  would upgrade that app: the step for its source on, and for installers the Installer
+  updates step, an `update` command and the app selected.
 - The help popup (`?`) names your files; `e` there opens `apps.toml` in `$VISUAL`,
   `$EDITOR` or `xdg-open`, and the list is re-read afterwards.
 

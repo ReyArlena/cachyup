@@ -11,7 +11,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
 
 use crate::app::AppState;
-use crate::catalog::{App, Origin, Source};
+use crate::catalog::{App, Source};
 use crate::config::{NUMBER_SETTINGS, UPDATE_STEPS};
 use crate::engine::edit::{tweak_applied, tweak_current};
 use crate::system::{InfoMap, has_cmd};
@@ -1083,9 +1083,6 @@ impl MainScreen {
                 if new {
                     badge.push(Span::styled(" new ", theme::badge_new()));
                 }
-                if a.origin == Origin::User {
-                    badge.push(Span::styled(" user", theme::dim()));
-                }
                 if let Some(package) = a.unless_cmd.as_ref().and_then(|c| self.conditions.get(c)) {
                     badge.push(Span::styled(
                         format!(" (default off: {package} installed)"),
@@ -1206,7 +1203,7 @@ fn table_line(
     width: usize,
     indent: usize,
 ) -> Line<'static> {
-    const STATUS_WIDTH: usize = 14;
+    const STATUS_WIDTH: usize = 22;
     let name_width = width.saturating_sub(3 + STATUS_WIDTH + 2 + indent).max(8);
     let badge_width: usize = badge.iter().map(|s| s.width()).sum();
     let room = name_width.saturating_sub(badge_width);
@@ -1235,6 +1232,7 @@ pub fn app_status(a: &App, app: &AppState, info: &InfoMap) -> (String, Style) {
     let on = app.config.selection.app_on(&a.key());
     let available = info.get(&a.key()).and_then(|i| i.available);
     match app.is_installed(a) {
+        Some(true) if will_update(a, app) => ("Installed, will update".into(), theme::on()),
         Some(true) => ("Installed".into(), theme::on()),
         Some(false) if available == Some(false) => {
             ("Unavailable".into(), Style::default().fg(theme::BAD))
@@ -1242,6 +1240,26 @@ pub fn app_status(a: &App, app: &AppState, info: &InfoMap) -> (String, Style) {
         Some(false) if on => ("Not installed".into(), Style::default().fg(theme::WARN)),
         Some(false) => ("Not installed".into(), theme::dim()),
         None => ("Unknown".into(), theme::dim()),
+    }
+}
+
+/// Whether a full system update, as configured now, would upgrade this
+/// installed app: the update task on, the step for its source on, and for
+/// an installer an `update` command plus the app selected (the package
+/// managers upgrade everything they know, installers only what is chosen).
+fn will_update(a: &App, app: &AppState) -> bool {
+    if !app.config.tasks.update {
+        return false;
+    }
+    match a.source {
+        Source::Pacman => app.config.step_enabled("pacman"),
+        Source::Aur => app.config.step_enabled("aur"),
+        Source::Flatpak => app.config.step_enabled("flatpak"),
+        Source::Installer => {
+            app.config.step_enabled("installers")
+                && app.config.selection.app_on(&a.key())
+                && a.installer.as_ref().is_some_and(|i| i.update.is_some())
+        }
     }
 }
 
@@ -1281,5 +1299,63 @@ fn task_summary(task: Task, app: &AppState) -> String {
                 .count();
             format!("{on} of {} selected", app.catalog.tweaks.len())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::paths::Paths;
+
+    /// A sandbox with two installer apps: one present (with an update
+    /// command), one present without.
+    fn sandbox() -> (tempfile::TempDir, AppState) {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::under(dir.path());
+        std::fs::create_dir_all(&paths.config_dir).unwrap();
+        std::fs::create_dir_all(paths.home.join("bin")).unwrap();
+        std::fs::write(paths.home.join("bin/tool"), "").unwrap();
+        std::fs::write(paths.home.join("bin/plain"), "").unwrap();
+        std::fs::write(
+            paths.apps_file(),
+            r#"
+[[installer]]
+name = "tool"
+check = "~/bin/tool"
+install = "true"
+update = "tool update"
+
+[[installer]]
+name = "plain"
+check = "~/bin/plain"
+install = "true"
+"#,
+        )
+        .unwrap();
+        let app = AppState::load(paths).unwrap();
+        (dir, app)
+    }
+
+    #[test]
+    fn installed_apps_say_when_an_update_will_run() {
+        let (_dir, mut app) = sandbox();
+        let info = InfoMap::default();
+        let status =
+            |app: &AppState, key: &str| app_status(app.catalog.app(key).unwrap(), app, &info).0;
+        assert_eq!(status(&app, "installer/tool"), "Installed");
+
+        // Needs the step, the update task and the app selected.
+        app.config.update.insert("installers".into(), true);
+        assert_eq!(status(&app, "installer/tool"), "Installed", "not selected");
+        app.set_app("installer/tool", true);
+        app.set_app("installer/plain", true);
+        assert_eq!(status(&app, "installer/tool"), "Installed, will update");
+        assert_eq!(
+            status(&app, "installer/plain"),
+            "Installed",
+            "no update command"
+        );
+        app.config.tasks.update = false;
+        assert_eq!(status(&app, "installer/tool"), "Installed");
     }
 }
