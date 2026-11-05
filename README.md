@@ -38,7 +38,7 @@ whole session, so a long AUR build never stops at a password prompt.
 │   10 of 10 steps            ││ ✓ discord                              Installed      │
 │                             ││     ✓ Disable host update              Applied        │
 │ ✓ Install Apps              ││ ✓ docker                               Installed      │
-│   136 selected, 2 to install││ ✗ junction (default off: dms-shell ... Not installed  │
+│   136 selected, 2 to install││ ✗ junction (default off: dux-shell ... Not installed  │
 │                             ││ ✓ zed                     new          Not installed  │
 │ ✓ Install Tweaks            ││                                                       │
 │   2 of 3 selected           ││ AUR packages  18/18                                   │
@@ -60,7 +60,7 @@ the keys for the current screen. Changes are saved as you make them.
 Ticks are green and switched on; crosses are grey and switched off. Blue entries with a
 `new` badge were added in a cachyup update and start switched off. Names say what an entry
 does; anything about its current state is in brackets after it, e.g. `Set as default link
-handler (currently dms-open)` for a tweak not yet applied, or `(default off: dms-shell
+handler (currently dms-open)` for a tweak not yet applied, or `(default off: dux-shell
 installed)` for an app that is off by default on this machine.
 
 `r` asks for confirmation: `Enter` runs, `d` does a dry run, `Esc` cancels. While running,
@@ -154,8 +154,8 @@ Every app and tweak is on or off, saved in `~/.config/cachyup/selection.toml`. S
 app off never uninstalls it.
 
 - **First launch:** everything is on, except entries with a condition (`unless_cmd`).
-  Junction (a link chooser) and its tweak are off when DankMaterialShell's `dms` command
-  is installed, because DMS has its own link chooser.
+  Junction (a link chooser) and its tweak are off when Dux Shell's `dms` command
+  is installed, because Dux Shell has its own link chooser.
 - **cachyup adds an app in an update:** a popup at launch lists the new entries. They start
   off, shown in blue with a `new` badge for that session. `Enter` jumps to the list to
   review them.
