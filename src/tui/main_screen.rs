@@ -1103,11 +1103,11 @@ impl MainScreen {
         let focused = self.focus == PANE_TASKS;
         let settings = Task::ALL.iter().filter(|t| !t.is_task()).count() as u16;
         let [tasks_area, settings_area] =
-            Layout::vertical([Constraint::Min(5), Constraint::Length(settings + 2)]).areas(area);
+            Layout::vertical([Constraint::Min(5), Constraint::Length(settings + 3)]).areas(area);
         hits.add(area, Hit::Pane(PANE_TASKS));
         let in_settings = !self.current().is_task();
 
-        // Tasks: label, summary, blank line.
+        // Tasks: label and summary. Settings: one line each plus a blank one.
         let block = pane_block("Tasks", focused && !in_settings);
         let inner = block.inner(tasks_area);
         frame.render_widget(block, tasks_area);
@@ -1140,7 +1140,6 @@ impl MainScreen {
                 format!("   {}", task_summary(*task, app)),
                 theme::dim(),
             )));
-            lines.push(Line::from(""));
         }
         frame.render_widget(Paragraph::new(lines), inner);
 

@@ -53,7 +53,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Ctrl-Up and Ctrl-Down jump to the start and end of a list, like Home and End.
 - "Add app" checks the package exists (pacman -Si, the AUR, Flathub) before adding it.
 - Every list is sorted by name within its group (apps, tweaks, review entries), whatever
-  order the file has, so an added entry is where you expect rather than at the end.
+  order the file has. An added entry also goes into `apps.toml` in A-Z position when the
+  list there is already in order.
 - The help popup (`?`) names your files; `e` there opens `apps.toml` in `$VISUAL`,
   `$EDITOR` or `xdg-open`, and the list is re-read afterwards.
 

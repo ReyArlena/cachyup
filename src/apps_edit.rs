@@ -100,9 +100,20 @@ fn list_name(value: &Value) -> Option<String> {
     }
 }
 
-/// Append to a list, matching the indent of its last entry so a multi-line
-/// list stays one entry per line. A one-line list stays one line.
+/// Add to a list in A-Z position when the list is already in A-Z order,
+/// else at the end. A multi-line list keeps one entry per line, matching
+/// the indent of its last entry; a one-line list stays one line.
 fn push_value(target: &mut Array, mut value: Value) {
+    let names: Vec<String> = target
+        .iter()
+        .filter_map(list_name)
+        .map(|n| n.to_lowercase())
+        .collect();
+    let sorted = names.windows(2).all(|w| w[0] <= w[1]);
+    let at = match (sorted, list_name(&value).map(|n| n.to_lowercase())) {
+        (true, Some(new)) => names.iter().position(|n| *n > new),
+        _ => None,
+    };
     // An entry's prefix holds everything since the previous comma, including
     // any comment on the previous line; keep only the indent after the newline.
     let indent = target
@@ -110,14 +121,46 @@ fn push_value(target: &mut Array, mut value: Value) {
         .last()
         .and_then(|v| v.decor().prefix().and_then(|p| p.as_str()))
         .and_then(|p| p.rsplit_once('\n').map(|(_, indent)| indent.to_string()));
-    match indent {
-        Some(indent) => {
+    match (indent, at) {
+        (Some(indent), at) => {
             value.decor_mut().set_prefix(format!("\n{indent}"));
             value.decor_mut().set_suffix("");
-            target.push_formatted(value);
+            match at {
+                Some(i) => {
+                    // The prefix of the entry that follows holds the comment
+                    // of the line above it. Keep that comment on its line by
+                    // handing the prefix to the new entry and giving the
+                    // follower a plain one.
+                    if let Some(following) = target.get_mut(i) {
+                        let prefix = following
+                            .decor()
+                            .prefix()
+                            .and_then(|p| p.as_str())
+                            .map(String::from);
+                        if let Some(prefix) = prefix {
+                            value.decor_mut().set_prefix(prefix);
+                            following.decor_mut().set_prefix(format!("\n{indent}"));
+                        }
+                    }
+                    target.insert_formatted(i, value);
+                }
+                None => target.push_formatted(value),
+            }
             target.set_trailing_comma(true);
         }
-        None => target.push(value),
+        (None, at) => {
+            // One-line list: `["a", "b"]`, a space before every entry but
+            // the first.
+            let i = at.unwrap_or(target.len());
+            value.decor_mut().set_prefix(if i == 0 { "" } else { " " });
+            value.decor_mut().set_suffix("");
+            if i == 0
+                && let Some(following) = target.get_mut(0)
+            {
+                following.decor_mut().set_prefix(" ");
+            }
+            target.insert_formatted(i, value);
+        }
     }
 }
 
@@ -170,8 +213,8 @@ installs = [\"z\"]
 # My apps.
 pacman = [
     \"ark\", # archiver
-    \"htop\",
     \"btop\",
+    \"htop\",
     { name = \"junction\", unless_cmd = \"dms\" },
 ]
 aur = [\"yay\"]
@@ -202,6 +245,22 @@ installs = [\"z\"]
         // The result parses as a catalog.
         let file: Result<toml::Value, _> = toml::from_str(&out);
         assert!(file.is_ok());
+    }
+
+    #[test]
+    fn sorted_lists_take_new_entries_in_order() {
+        let base = "pacman = [\n    \"ark\",\n    \"htop\", # viewer\n    \"zed\",\n]\n";
+        let out = append(base, "pacman = [\"btop\", \"zz\"]").unwrap();
+        assert_eq!(
+            out,
+            "pacman = [\n    \"ark\",\n    \"btop\",\n    \"htop\", # viewer\n    \"zed\",\n    \"zz\",\n]\n"
+        );
+        // An unsorted list is left in its order, new entries at the end.
+        let out = append("aur = [\"zed\", \"ark\"]", "aur = [\"btop\"]").unwrap();
+        assert_eq!(out, "aur = [\"zed\", \"ark\", \"btop\"]\n");
+        // A one-line sorted list, including at the front.
+        let out = append("aur = [\"b\", \"d\"]", "aur = [\"a\", \"c\"]").unwrap();
+        assert_eq!(out, "aur = [\"a\", \"b\", \"c\", \"d\"]\n");
     }
 
     #[test]
