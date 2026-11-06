@@ -622,7 +622,7 @@ pub fn draw_help(frame: &mut Frame, area: Rect, screen_keys: &[(&str, &str)], ap
     let mut lines = vec![
         Line::from(Span::styled("Moving around", theme::title())),
         Line::from("  Arrows / h j k l    move, scroll"),
-        Line::from("  PgUp PgDn g G       jump"),
+        Line::from("  PgUp PgDn g G       page, start, end (also Ctrl-Up / Ctrl-Down)"),
         Line::from("  Tab                 other pane"),
         Line::from("  Mouse               click to select, wheel to scroll"),
         Line::from(""),

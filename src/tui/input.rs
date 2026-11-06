@@ -51,8 +51,14 @@ pub fn map_event(event: Event) -> Option<Action> {
 }
 
 pub fn map_key(key: KeyEvent) -> Option<Action> {
-    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-        return Some(Action::Quit);
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        // Ctrl-Up / Ctrl-Down: start or end of the list, same as Home / End.
+        match key.code {
+            KeyCode::Char('c') => return Some(Action::Quit),
+            KeyCode::Up => return Some(Action::Home),
+            KeyCode::Down => return Some(Action::End),
+            _ => {}
+        }
     }
     Some(match key.code {
         KeyCode::Up | KeyCode::Char('k') => Action::Up,
@@ -138,6 +144,18 @@ fn contains(r: &Rect, x: u16, y: u16) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ctrl_arrows_jump_to_the_ends() {
+        let key = |code, m| map_key(KeyEvent::new(code, m));
+        assert_eq!(key(KeyCode::Up, KeyModifiers::CONTROL), Some(Action::Home));
+        assert_eq!(key(KeyCode::Down, KeyModifiers::CONTROL), Some(Action::End));
+        assert_eq!(key(KeyCode::Up, KeyModifiers::NONE), Some(Action::Up));
+        assert_eq!(
+            key(KeyCode::Char('c'), KeyModifiers::CONTROL),
+            Some(Action::Quit)
+        );
+    }
 
     #[test]
     fn vim_keys_navigate_and_letters_pass_through() {

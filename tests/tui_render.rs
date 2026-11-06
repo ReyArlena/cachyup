@@ -289,3 +289,31 @@ fn f_groups_the_app_list_by_category() {
     let text = render(&mut app, 120, 50);
     assert!(text.contains("Pacman packages"), "{text}");
 }
+
+#[test]
+fn removed_managed_app_gets_a_popup() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = cachyup::paths::Paths::under(dir.path());
+    std::fs::create_dir_all(&paths.config_dir).unwrap();
+    std::fs::create_dir_all(&paths.state_dir).unwrap();
+    std::fs::write(
+        paths.apps_file(),
+        "[[installer]]\nname = \"ghost\"\ncheck = \"~/bin/ghost\"\ninstall = \"true\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        paths.config_file(),
+        "[settings]\nupdate_check = false\n[apps]\n\"installer/ghost\" = true\n",
+    )
+    .unwrap();
+    std::fs::write(
+        paths.state_file(),
+        "managed = [\"installer/ghost\"]\nreviewed = []\ndismissed = []\n",
+    )
+    .unwrap();
+    let state = AppState::load(paths).unwrap();
+    assert_eq!(state.launch.removed, vec!["installer/ghost".to_string()]);
+    let mut app = App::new(state, false, false);
+    let text = render(&mut app, 120, 40);
+    assert!(text.contains("Apps removed"), "{text}");
+}
