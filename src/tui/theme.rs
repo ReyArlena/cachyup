@@ -60,7 +60,7 @@ pub fn on() -> Style {
 }
 
 pub fn off() -> Style {
-    Style::default().fg(DIM)
+    dim()
 }
 
 pub fn badge_new() -> Style {
@@ -111,7 +111,7 @@ pub fn status(status: Status) -> Style {
         Status::Skipped | Status::Attention => s.fg(WARN),
         Status::Failed => s.fg(BAD),
         Status::Would => s.fg(ACCENT),
-        Status::Cancelled => Style::default().fg(DIM),
+        Status::Cancelled => dim(),
     }
 }
 
