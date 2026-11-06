@@ -355,3 +355,17 @@ fn add_app_appends_to_the_list() {
     let config = std::fs::read_to_string(dir.path().join("config/config.toml")).unwrap();
     assert!(config.contains("\"pacman/nano\" = true"), "{config}");
 }
+
+#[test]
+fn t_and_s_jump_between_the_sidebar_boxes() {
+    let (_dir, state) = sandbox();
+    let mut app = App::new(state, false, false);
+    app.key_for_test(key(KeyCode::Down));
+    app.key_for_test(key(KeyCode::Char('c')));
+    app.key_for_test(key(KeyCode::Char('s')));
+    let text = render(&mut app, 120, 40);
+    assert!(text.contains("┌ General"), "{text}");
+    app.key_for_test(key(KeyCode::Char('t')));
+    let text = render(&mut app, 120, 40);
+    assert!(text.contains("Full System Update options"), "{text}");
+}

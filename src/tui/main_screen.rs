@@ -547,6 +547,21 @@ impl MainScreen {
         match action {
             Action::Char('r') => return vec![Effect::AskRun],
             Action::Char('H') => return vec![Effect::History],
+            // Jump to a sidebar box from anywhere on the screen.
+            Action::Char('t') if !self.filtering => {
+                if !self.current().is_task() {
+                    self.task = 0;
+                }
+                self.focus = PANE_TASKS;
+                return Vec::new();
+            }
+            Action::Char('s') if !self.filtering => {
+                if self.current().is_task() {
+                    self.task = Task::ALL.iter().position(|t| !t.is_task()).unwrap_or(0);
+                }
+                self.focus = PANE_TASKS;
+                return Vec::new();
+            }
             _ => {}
         }
         if self.focus == PANE_TASKS {
@@ -1079,7 +1094,14 @@ impl MainScreen {
             }
             hints.push(("Esc", "back"));
         }
-        hints.extend([("r", "run"), ("H", "history"), ("?", "help"), ("q", "quit")]);
+        hints.extend([
+            ("t", "tasks"),
+            ("s", "settings"),
+            ("r", "run"),
+            ("H", "history"),
+            ("?", "help"),
+            ("q", "quit"),
+        ]);
         hints
     }
 
