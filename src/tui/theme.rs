@@ -49,6 +49,11 @@ pub fn dim() -> Style {
     Style::default().fg(DIM)
 }
 
+/// The dotted leader between a name and its status: quieter than text.
+pub fn leader() -> Style {
+    Style::default().fg(Color::DarkGray)
+}
+
 pub fn on() -> Style {
     Style::default().fg(ON)
 }
