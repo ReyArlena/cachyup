@@ -46,17 +46,16 @@ already has a ticket), then opens. The ticket is kept fresh in the background fo
 whole session, so a long AUR build never stops at a password prompt.
 
 ```
-┌ Tasks ──────────────────────┐┌ Install Apps options ─────────────────────────────────┐
+┌ Tasks ──────────────────────┐┌ Install Apps & Tweaks options ────────────────────────┐
 │ ✓ Full System Update        ││ Pacman packages  101/102                              │
-│   10 of 10 steps            ││ ✓ discord                              Installed      │
-│                             ││     ✓ Disable host update              Applied        │
-│ ✓ Install Apps              ││ ✓ docker                               Installed      │
-│   136 selected, 2 to install││ ✗ junction (default off: dux-shell ... Not installed  │
-│                             ││ ✓ zed                     new          Not installed  │
-│ ✓ Install Tweaks            ││                                                       │
-│   2 of 3 selected           ││ AUR packages  18/18                                   │
+│   10 of 11 steps            ││ ✓ discord  ........................... Installed      │
+│ ✓ Install Apps & Tweaks     ││     ✓ Disable host update  ........... Applied        │
+│   136 apps, 2 tweaks, 2 to  ││ ✓ docker  ............................ Installed      │
+│   install                   ││ ✗ junction (default off: dux-shell ... Not installed  │
+└─────────────────────────────┘│                                                       │
+┌ Settings ───────────────────┐│ AUR packages  18/18                                   │
+│ ▸ General                   ││ ✓ spotify  ........................... Installed      │
 └─────────────────────────────┘└───────────────────────────────────────────────────────┘
- Space toggle  c options  r run  H history  ? help  q quit
 ```
 
 The left pane lists the three tasks; `Space` switches one on or off. The right pane shows
@@ -69,8 +68,7 @@ Changes are saved as you make them.
 | Task | Options |
 |------|---------|
 | Full System Update | Each step on or off: rate mirrors, keyrings, `pacman -Syu`, `yay -Sua`, `flatpak update`, installer updates, and the cleanup steps. |
-| Install Apps | Every app in the list, grouped by source, with a status column (Installed, Not installed, Unavailable; an installed app says "will update" when the full system update, as set up now, would upgrade it: its source's step on, and for an installer the Installer updates step, an `update` command and the app selected). Tweaks for an app are listed under it. `i` shows the description and package details, `I` shows a description line under every entry (remembered), `/` filters (names and group headings), `a` switches a whole group, `f` groups by category (Developer Tools, Gaming, Internet, ...) instead of by package source (remembered; cachyup's own map decides the category, anything it does not know goes under Other). `u` uninstalls the app under the cursor after a confirmation that shows the exact command (`pacman -Rns` or `flatpak uninstall`; `c` copies it to do it by hand) and switches it off so the next run does not put it back. Runs like any other run, streamed and logged. Apps from install scripts need an `uninstall` line in their entry. |
-| Install Tweaks | The same tweaks as a flat list, with Applied / Not applied (`I` for descriptions). Toggling here and under the app is the same switch. Turning a tweak on also turns on its app if that app is not installed (a tweak is skipped while its app is missing). |
+| Install Apps & Tweaks | Every app in the list, grouped by source, with a status column (Installed, Not installed, Unavailable; an installed app says "will update" when the full system update, as set up now, would upgrade it: its source's step on, and for an installer the Installer updates step, an `update` command and the app selected). Tweaks for an app are listed under it, and tweaks that belong to no app under "Additional tweaks" at the end; turning a tweak on also turns on its app if that app is not installed, since a tweak is skipped while its app is missing. `i` shows the description and package details, `I` shows a description line under every entry (remembered), `/` filters (names and group headings), `a` switches a whole group, `f` groups by category (Developer Tools, Gaming, Internet, ...) instead of by package source (remembered; cachyup's own map decides the category, anything it does not know goes under Other). `u` uninstalls the app under the cursor after a confirmation that shows the exact command (`pacman -Rns` or `flatpak uninstall`; `c` copies it to do it by hand) and switches it off so the next run does not put it back. Runs like any other run, streamed and logged. Apps from install scripts need an `uninstall` line in their entry. |
 | Settings box (under the tasks) | General: the cleanup numbers (mirror rating cooldown, package cache versions, yay cache age, runs kept) and interface toggles (descriptions, group by category, hide credits). Then entries that act on Enter: open the app list in your editor, add one app by name, review new installs, review new suggestions (cachyup's own list). The review entries show their count, and the header says "Please review new apps" while either has something. |
 
 Ticks are green and switched on; crosses are grey and switched off. Names say what an

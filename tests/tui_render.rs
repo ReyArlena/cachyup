@@ -75,7 +75,7 @@ fn app_list_shows_packages_tweaks_and_status() {
     app.key_for_test(key(KeyCode::Down));
     app.key_for_test(key(KeyCode::Char('c')));
     let text = render(&mut app, 120, 40);
-    assert!(text.contains("Install Apps options"), "{text}");
+    assert!(text.contains("Install Apps & Tweaks options"), "{text}");
     assert!(text.contains("Pacman packages"));
     assert!(text.contains("adw-gtk-theme"));
 
@@ -112,9 +112,9 @@ fn app_list_shows_packages_tweaks_and_status() {
 #[test]
 fn run_modal_and_dry_run_complete() {
     let (dir, mut state) = sandbox();
-    // Tweaks only: quick, and the tweak files live in the sandbox home.
+    // Apps & Tweaks only, with nothing selected: quick, and anything a
+    // tweak would touch lives in the sandbox home.
     state.config.tasks.update = false;
-    state.config.tasks.apps = false;
     state.save_config().unwrap();
     let mut app = App::new(state, false, false);
     app.key_for_test(key(KeyCode::Char('r')));
@@ -223,7 +223,7 @@ fn settings_pane_and_review_screen_render() {
         app.key_for_test(key(KeyCode::Esc));
     }
     // Down to General and into it: the numbers and the toggles.
-    for _ in 0..3 {
+    for _ in 0..2 {
         app.key_for_test(key(KeyCode::Down));
     }
     app.key_for_test(key(KeyCode::Char('c')));
@@ -322,8 +322,8 @@ fn removed_managed_app_gets_a_popup() {
 fn add_app_appends_to_the_list() {
     let (dir, state) = sandbox();
     let mut app = App::new(state, false, false);
-    // Sidebar: Update, Apps, Tweaks, General, Edit, Open, Add.
-    for _ in 0..6 {
+    // Sidebar: Update, Apps, General, Edit, Open, Add.
+    for _ in 0..5 {
         app.key_for_test(key(KeyCode::Down));
     }
     app.key_for_test(key(KeyCode::Enter));

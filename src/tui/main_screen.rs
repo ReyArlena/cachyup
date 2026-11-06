@@ -28,8 +28,8 @@ const PANE_OPTIONS: usize = 1;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Task {
     Update,
+    /// Apps and their tweaks, one list.
     Apps,
-    Tweaks,
     /// Settings box: numbers and interface toggles.
     General,
     /// Settings box: placeholder for editing the list in the app.
@@ -42,10 +42,9 @@ pub enum Task {
 
 impl Task {
     /// Sidebar order: the Tasks box, then the Settings box.
-    pub const ALL: [Task; 9] = [
+    pub const ALL: [Task; 8] = [
         Task::Update,
         Task::Apps,
-        Task::Tweaks,
         Task::General,
         Task::EditList,
         Task::OpenEditor,
@@ -58,7 +57,6 @@ impl Task {
         match self {
             Task::Update => crate::engine::plan::TASK_UPDATE,
             Task::Apps => crate::engine::plan::TASK_APPS,
-            Task::Tweaks => crate::engine::plan::TASK_TWEAKS,
             Task::General => "General",
             Task::EditList => "Edit apps list",
             Task::OpenEditor => "Open apps list in editor",
@@ -70,20 +68,17 @@ impl Task {
 
     /// In the Tasks box, with an on/off switch.
     fn is_task(self) -> bool {
-        matches!(self, Task::Update | Task::Apps | Task::Tweaks)
+        matches!(self, Task::Update | Task::Apps)
     }
 
     /// Has a list of options in the right pane.
     fn has_options(self) -> bool {
-        matches!(
-            self,
-            Task::Update | Task::Apps | Task::Tweaks | Task::General
-        )
+        matches!(self, Task::Update | Task::Apps | Task::General)
     }
 
-    /// Apps and Tweaks: the panes with filter, descriptions and toggle-all.
+    /// The pane with filter, descriptions and toggle-all.
     fn lists_apps(self) -> bool {
-        matches!(self, Task::Apps | Task::Tweaks)
+        self == Task::Apps
     }
 
     fn help(self) -> &'static str {
@@ -92,10 +87,7 @@ impl Task {
                 "Mirrors, keyrings, pacman, AUR and flatpak updates, then cleanup and post-update checks. c to choose steps."
             }
             Task::Apps => {
-                "Install the apps switched on in your list (pacman, AUR, flatpak, install scripts). Never uninstalls. c to choose apps."
-            }
-            Task::Tweaks => {
-                "Apply config tweaks for your apps. Each is skipped while its app is not installed. c to choose tweaks."
+                "Install the apps switched on in your list (pacman, AUR, flatpak, install scripts), then apply their tweaks. Never uninstalls. c to choose."
             }
             Task::General => {
                 "Numbers the cleanup uses and how the app list looks. c to change them."
@@ -123,7 +115,6 @@ impl Task {
         match self {
             Task::Update => t.update,
             Task::Apps => t.apps,
-            Task::Tweaks => t.tweaks,
             _ => true,
         }
     }
@@ -133,7 +124,6 @@ impl Task {
         match self {
             Task::Update => t.update = on,
             Task::Apps => t.apps = on,
-            Task::Tweaks => t.tweaks = on,
             _ => {}
         }
     }
@@ -225,8 +215,8 @@ pub struct MainScreen {
     focus: usize,
     task: usize,
     /// Cursor and scroll per task.
-    cursor: [usize; 9],
-    offset: [usize; 9],
+    cursor: [usize; 8],
+    offset: [usize; 8],
     filter: TextInput,
     filtering: bool,
     /// Show a description line under every app and tweak.
@@ -248,8 +238,8 @@ impl MainScreen {
         let mut s = Self {
             focus: PANE_TASKS,
             task: 0,
-            cursor: [0; 9],
-            offset: [0; 9],
+            cursor: [0; 8],
+            offset: [0; 8],
             filter: TextInput::default(),
             filtering: false,
             show_desc: app.config.settings.show_descriptions,
@@ -392,40 +382,37 @@ impl MainScreen {
                         }
                     }
                 }
-                rows
-            }
-            Task::Tweaks => {
-                let mut rows = Vec::new();
-                // Sorted as shown: "app: tweak", or the tweak name alone.
-                let shown_as = |t: &crate::catalog::Tweak| {
-                    let owner = t
-                        .app
-                        .as_deref()
-                        .and_then(|k| app.catalog.app(k))
-                        .map(|a| a.display_name().to_lowercase());
-                    (owner, t.name.to_lowercase())
-                };
-                let mut tweaks: Vec<_> = app
+                // Tweaks that belong to no app, at the end.
+                let mut loose: Vec<_> = app
                     .catalog
                     .tweaks
                     .iter()
                     .filter(|t| {
-                        matches(&t.name)
-                            || t.app
-                                .as_deref()
-                                .and_then(|k| app.catalog.app(k))
-                                .is_some_and(|a| matches(a.display_name()))
+                        t.app.is_none() && (matches(&t.name) || matches("additional tweaks"))
                     })
                     .collect();
-                tweaks.sort_by_key(|t| shown_as(t));
-                for t in tweaks {
-                    self.push_row(
-                        &mut rows,
-                        Row::Tweak {
-                            id: t.id.clone(),
-                            nested: false,
-                        },
-                    );
+                loose.sort_by_key(|t| t.name.to_lowercase());
+                if !loose.is_empty() {
+                    if !rows.is_empty() {
+                        rows.push(Row::Blank);
+                    }
+                    let on = loose
+                        .iter()
+                        .filter(|t| app.config.selection.tweak_on(&t.id))
+                        .count();
+                    rows.push(Row::Header(format!(
+                        "Additional tweaks  {on}/{}",
+                        loose.len()
+                    )));
+                    for t in loose {
+                        self.push_row(
+                            &mut rows,
+                            Row::Tweak {
+                                id: t.id.clone(),
+                                nested: false,
+                            },
+                        );
+                    }
                 }
                 rows
             }
@@ -1083,12 +1070,6 @@ impl MainScreen {
                     ("u", "uninstall"),
                     ("/", "filter"),
                 ]),
-                Task::Tweaks => hints.extend([
-                    ("i", "info"),
-                    ("I", "descriptions"),
-                    ("A", "select all"),
-                    ("/", "filter"),
-                ]),
                 Task::General => {}
                 _ => hints.push(("Enter", "open")),
             }
@@ -1638,20 +1619,20 @@ fn task_summary(task: Task, app: &AppState) -> String {
                 .iter()
                 .filter(|a| app.is_installed(a) == Some(false))
                 .count();
-            if missing > 0 {
-                format!("{} selected, {missing} to install", selected.len())
-            } else {
-                format!("{} selected, all installed", selected.len())
-            }
-        }
-        Task::Tweaks => {
-            let on = app
+            let tweaks = app
                 .catalog
                 .tweaks
                 .iter()
                 .filter(|t| app.config.selection.tweak_on(&t.id))
                 .count();
-            format!("{on} of {} selected", app.catalog.tweaks.len())
+            if missing > 0 {
+                format!(
+                    "{} apps, {tweaks} tweaks, {missing} to install",
+                    selected.len()
+                )
+            } else {
+                format!("{} apps, {tweaks} tweaks selected", selected.len())
+            }
         }
         _ => String::new(),
     }

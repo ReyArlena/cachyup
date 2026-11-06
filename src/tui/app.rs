@@ -648,7 +648,7 @@ impl App {
                 Span::raw(format!("{} selected, {missing} to install", selected.len())),
             ]));
         }
-        if state.config.tasks.tweaks {
+        if state.config.tasks.apps {
             let n = state
                 .catalog
                 .tweaks

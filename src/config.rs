@@ -119,8 +119,8 @@ pub struct Config {
 #[serde(default)]
 pub struct Tasks {
     pub update: bool,
+    /// Install Apps & Tweaks: the apps switched on, then their tweaks.
     pub apps: bool,
-    pub tweaks: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -145,7 +145,6 @@ impl Default for Tasks {
         Self {
             update: true,
             apps: true,
-            tweaks: true,
         }
     }
 }
@@ -284,7 +283,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
         let mut c = Config::default();
-        c.tasks.tweaks = false;
+        c.tasks.apps = false;
         c.update.insert("orphans".into(), false);
         c.settings.yay_cache_keep_days = 10;
         c.selection.apps.insert("pacman/discord".into(), true);

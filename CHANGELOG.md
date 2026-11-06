@@ -52,6 +52,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   release when there is one.
 - Ctrl-Up and Ctrl-Down jump to the start and end of a list, like Home and End.
 - `t` and `s` jump to the Tasks and Settings boxes from anywhere on the main screen.
+- Install Apps and Install Tweaks are one task, "Install Apps & Tweaks", with one switch.
+  Tweaks sit under their app as before; tweaks without an app get an "Additional tweaks"
+  group at the end of the list. A `tweaks` line in `[tasks]` of config.toml is ignored.
 - "Add app" checks the package exists (pacman -Si, the AUR, Flathub) before adding it.
 - Every list is sorted by name within its group (apps, tweaks, review entries), whatever
   order the file has. An added entry also goes into `apps.toml` in A-Z position when the

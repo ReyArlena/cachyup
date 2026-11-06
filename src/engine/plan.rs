@@ -69,8 +69,7 @@ pub const GROUP_CLEANUP: &str = "Cleanup";
 pub const GROUP_CHECKS: &str = "Post-update checks";
 
 pub const TASK_UPDATE: &str = "Full System Update";
-pub const TASK_APPS: &str = "Install Apps";
-pub const TASK_TWEAKS: &str = "Install Tweaks";
+pub const TASK_APPS: &str = "Install Apps & Tweaks";
 
 pub fn build_plan(catalog: &Catalog, config: &Config, dry: bool) -> Plan {
     let selection = &config.selection;
@@ -84,9 +83,6 @@ pub fn build_plan(catalog: &Catalog, config: &Config, dry: bool) -> Plan {
     }
     if tasks.apps {
         plan.tasks.push(TASK_APPS.into());
-    }
-    if tasks.tweaks {
-        plan.tasks.push(TASK_TWEAKS.into());
     }
     if plan.tasks.is_empty() {
         return plan;
@@ -119,7 +115,7 @@ pub fn build_plan(catalog: &Catalog, config: &Config, dry: bool) -> Plan {
         }
     }
 
-    if tasks.tweaks {
+    if tasks.apps {
         let tweaks: Vec<_> = catalog
             .tweaks
             .iter()
@@ -127,7 +123,7 @@ pub fn build_plan(catalog: &Catalog, config: &Config, dry: bool) -> Plan {
             .map(|t| {
                 let app = t.app.as_ref().and_then(|k| catalog.app(k)).cloned();
                 // Will this run install the app first? Matters for dry runs.
-                let app_queued = tasks.apps && t.app.as_ref().is_some_and(|k| selection.app_on(k));
+                let app_queued = t.app.as_ref().is_some_and(|k| selection.app_on(k));
                 (t.clone(), app, app_queued)
             })
             .collect();
@@ -168,7 +164,7 @@ mod tests {
         let mut config = Config::default();
         config.tasks.update = false;
         config.tasks.apps = false;
-        config.tasks.tweaks = false;
+        config.tasks.apps = false;
         let plan = build_plan(&Catalog::builtin(), &config, true);
         assert!(plan.steps.is_empty());
     }
