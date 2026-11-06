@@ -1177,7 +1177,7 @@ impl MainScreen {
             } else {
                 Style::default()
             };
-            let mut spans = vec![Span::styled(format!(" {} ", task.label()), style)];
+            let mut spans = vec![Span::styled(format!(" ▸ {} ", task.label()), style)];
             let count = match task {
                 Task::ReviewInstalled => Some(installed),
                 Task::ReviewBuiltin => Some(builtin),
