@@ -59,7 +59,8 @@ pub fn tweak_default(tweak: &Tweak, has_cmd: &dyn Fn(&str) -> bool) -> bool {
 /// - Entries in the list but not in the selection get their default.
 /// - Entries no longer in the list are forgotten.
 /// - A managed app that is selected but no longer installed was removed by
-///   hand: it is switched off and reported.
+///   hand: it is switched off and reported. Every selected app found
+///   installed now becomes managed, so this works without a run.
 ///
 /// `installed` returns `None` when it cannot tell (the probe failed).
 pub fn reconcile(
@@ -102,6 +103,12 @@ pub fn reconcile(
             selection.apps.insert(key.clone(), false);
             state.managed.remove(&key);
             out.removed.push(key);
+        }
+    }
+    for app in &catalog.apps {
+        let key = app.key();
+        if selection.app_on(&key) && installed(app) == Some(true) {
+            state.managed.insert(key);
         }
     }
 
@@ -162,6 +169,26 @@ mod tests {
         assert!(sel.app_on("pacman/ark"));
         assert!(!state.managed.contains("pacman/discord"));
         assert!(!state.managed.contains("pacman/gone-from-catalog"));
+    }
+
+    #[test]
+    fn selected_installed_apps_become_managed_at_launch() {
+        let c = Catalog::builtin();
+        let mut sel = Selection::default();
+        sel.apps.insert("pacman/ark".into(), true);
+        sel.apps.insert("pacman/discord".into(), false);
+        let (state, _) = reconcile(&c, &mut sel, None, &|_| Some(true), &|_| false);
+        assert!(
+            state.managed.contains("pacman/ark"),
+            "selected and installed"
+        );
+        assert!(!state.managed.contains("pacman/discord"), "not selected");
+        // Gone at the next launch: switched off and reported.
+        let installed = |a: &App| Some(a.name != "ark");
+        let (state, out) = reconcile(&c, &mut sel, Some(state), &installed, &|_| false);
+        assert_eq!(out.removed, vec!["pacman/ark".to_string()]);
+        assert!(!sel.app_on("pacman/ark"));
+        assert!(!state.managed.contains("pacman/ark"));
     }
 
     #[test]

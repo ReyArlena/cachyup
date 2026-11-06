@@ -67,6 +67,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - AUR packages renamed for Dux Shell 2.1: `dankcalendar-bin` is now `dux-calendar-bin`,
   `dsearch-bin` is now `dux-search-bin`.
 
+### Fixed
+
+- An app uninstalled by hand is noticed at the next launch even when no real run ever
+  touched it: every selected app found installed at launch now counts as managed.
+
 ### Removed
 
 - `user-apps.toml` and `selection.toml` (see above).

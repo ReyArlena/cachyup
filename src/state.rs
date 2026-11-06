@@ -20,8 +20,9 @@ pub struct State {
     /// Built-in entries (`source/name`, `tweak/id`) the user chose not to
     /// add. Not offered again.
     pub dismissed: BTreeSet<String>,
-    /// Apps cachyup installed, or found installed while selected, at least
-    /// once. If one of these goes missing it was removed on purpose.
+    /// Apps cachyup installed, or found installed while selected at a
+    /// launch or a run. If one of these goes missing it was removed on
+    /// purpose.
     pub managed: BTreeSet<String>,
 }
 
