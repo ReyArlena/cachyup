@@ -21,9 +21,12 @@ pub fn heading() -> Style {
     Style::default().add_modifier(Modifier::BOLD)
 }
 
-/// The cursor row in the focused pane.
+/// The cursor row in the focused pane: a quiet background, so the row's
+/// own colours (on, off, status) stay readable.
 pub fn selected() -> Style {
-    Style::default().add_modifier(Modifier::REVERSED)
+    Style::default()
+        .bg(Color::DarkGray)
+        .add_modifier(Modifier::BOLD)
 }
 
 /// The cursor row in a pane without focus.

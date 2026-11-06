@@ -1365,11 +1365,12 @@ fn table_line(
         shown.pop();
         shown.push('…');
     }
-    let pad = name_width.saturating_sub(shown.chars().count() + badge_width);
+    // One space of padding inside the name's own style.
+    let pad = name_width.saturating_sub(shown.chars().count() + 1 + badge_width);
     let mut spans = vec![
         Span::raw(" ".repeat(indent)),
         mark,
-        Span::styled(shown, name_style),
+        Span::styled(format!("{shown} "), name_style),
     ];
     spans.extend(badge);
     spans.push(Span::raw(" ".repeat(pad + 2)));
