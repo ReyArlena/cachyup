@@ -58,12 +58,13 @@ whole session, so a long AUR build never stops at a password prompt.
 └─────────────────────────────┘└───────────────────────────────────────────────────────┘
 ```
 
-The left pane lists the three tasks; `Space` switches one on or off. The right pane shows
-the highlighted task's options. Press `c` (or `Enter`, `Tab`, `→`/`l`) to move into them,
-and `Esc` (or `←`/`h`) to come back. Arrows and `h` `j` `k` `l` move everywhere, `?` lists
-the keys for the current screen and where your files are; `e` from there opens the app
-list in `$VISUAL` or `$EDITOR` (or with `xdg-open`) and re-reads it when you are done.
-Changes are saved as you make them.
+The left column holds the two tasks, each with a switch (`Space`), and a Settings box
+below them (`t` and `s` jump between the boxes). The right pane shows the highlighted
+entry's options. Press `c` (or `Enter`, `Tab`, `→`/`l`) to move into them, and `Esc` (or
+`←`/`h`) to come back. Arrows and `h` `j` `k` `l` move everywhere, Ctrl-Up/Ctrl-Down and
+`g`/`G` jump to the ends. `?` lists the keys for the current screen and where your files
+are; `e` from there opens the app list in `$VISUAL` or `$EDITOR` (or with `xdg-open`) and
+re-reads it when you are done. Changes are saved as you make them.
 
 | Task | Options |
 |------|---------|
@@ -171,8 +172,10 @@ Every app and tweak is on or off, saved under `[apps]` and `[tweaks]` in
   its own link chooser.
 - **cachyup adds an app in an update:** the launch popup counts it and Settings offers it
   for review. Nothing enters your list until you tick it.
-- **You uninstall an app cachyup installed:** at the next launch it is switched off, with a
-  popup saying so, so it is not reinstalled behind your back. Switch it on to get it back.
+- **You uninstall an app by hand:** at the next launch it is switched off, with a popup
+  saying so, so it is not reinstalled behind your back. Switch it on to get it back.
+  cachyup notes every switched-on app it finds installed at launch, so this works for
+  apps that were there before cachyup too.
 - **An app is dropped from the list:** it is forgotten. If it comes back later it counts as
   new.
 
