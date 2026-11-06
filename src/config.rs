@@ -134,6 +134,8 @@ pub struct Settings {
     pub update_check: bool,
     /// A description line under every app and tweak (`I` in the app).
     pub show_descriptions: bool,
+    /// Group the app list by category instead of package source (`f`).
+    pub group_by_category: bool,
 }
 
 impl Default for Tasks {
@@ -155,6 +157,7 @@ impl Default for Settings {
             runs_to_keep: 30,
             update_check: true,
             show_descriptions: false,
+            group_by_category: false,
         }
     }
 }

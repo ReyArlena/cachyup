@@ -432,8 +432,8 @@ impl ReviewScreen {
         let mut hints = vec![
             ("Space", "tick"),
             ("i", "info"),
-            ("a", "group"),
-            ("A", "all shown"),
+            ("a", "select group"),
+            ("A", "select all"),
             ("/", "filter"),
         ];
         if self.hidden_count() > 0 {

@@ -27,7 +27,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the binary is owned by a package (`pacman -Qo`), lives outside your home, or runs under
   cargo. cachyup itself is in the app list as an installer with that update command.
 - `A` in the app list switches everything shown on, or off again.
-- The app list says "Installed, will update" when the full system update as configured
+- The app list says "Installed (will update)" when the full system update as configured
   would upgrade that app: the step for its source on, and for installers the Installer
   updates step, an `update` command and the app selected.
 - Settings in the task sidebar: edit the app list in your editor, add an app by name, or
@@ -41,6 +41,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   --noconfirm` or `flatpak uninstall`, `c` copies it), then it runs as a one-step run and
   the app is switched off so the next run does not reinstall it. Install-script apps
   take an optional `uninstall` command in their entry (set for cachyup and Claude Code).
+- `f` in the app list groups apps by category (Developer Tools, Gaming, Internet,
+  Communication, Media, Graphics, Office, Desktop, System) instead of by package source.
+  The map is built in (`categories.toml`); unknown apps show under Other. Remembered.
 - The help popup (`?`) names your files; `e` there opens `apps.toml` in `$VISUAL`,
   `$EDITOR` or `xdg-open`, and the list is re-read afterwards.
 

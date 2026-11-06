@@ -19,6 +19,50 @@ pub const BUILTIN: &str = include_str!("../apps.toml");
 /// Name of the user's copy, in the config directory.
 pub const FILE_NAME: &str = "apps.toml";
 
+/// Category per package name, for grouping the app list. Built in; the
+/// user's file knows nothing about it.
+const CATEGORIES: &str = include_str!("../categories.toml");
+
+pub const OTHER_CATEGORY: &str = "Other";
+
+/// The categories in display order, each with its package names.
+pub fn categories() -> Vec<(String, Vec<String>)> {
+    let table: toml::Table = toml::from_str(CATEGORIES).expect("categories.toml is valid");
+    // `toml::Table` sorts keys; the file order is kept by re-reading headers.
+    let order: Vec<String> = CATEGORIES
+        .lines()
+        .filter_map(|l| {
+            l.trim()
+                .strip_prefix('"')?
+                .split_once('"')
+                .map(|(k, _)| k.to_string())
+        })
+        .filter(|k| table.contains_key(k))
+        .collect();
+    order
+        .into_iter()
+        .map(|name| {
+            let names = table[&name]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            (name, names)
+        })
+        .collect()
+}
+
+/// The category of a package name, or "Other".
+pub fn category_of(name: &str) -> String {
+    categories()
+        .into_iter()
+        .find(|(_, names)| names.iter().any(|n| n == name))
+        .map_or(OTHER_CATEGORY.to_string(), |(c, _)| c)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Source {
     Pacman,
@@ -597,6 +641,34 @@ mod tests {
         assert_eq!(extras.installs.len(), 5);
         assert!(extras.sets.is_empty());
         assert!(c.warnings.is_empty());
+    }
+
+    #[test]
+    fn categories_cover_the_builtin_list_once() {
+        let cats = categories();
+        assert_eq!(cats[0].0, "Developer Tools");
+        assert!(cats.iter().any(|(c, _)| c == "Gaming"));
+        let mut seen = HashSet::new();
+        for (_, names) in &cats {
+            for n in names {
+                assert!(seen.insert(n.clone()), "{n} is in two categories");
+            }
+        }
+        let c = Catalog::builtin();
+        let uncategorised: Vec<String> = c
+            .apps
+            .iter()
+            .filter(|a| category_of(&a.name) == OTHER_CATEGORY)
+            .map(App::key)
+            .collect();
+        assert!(uncategorised.is_empty(), "{uncategorised:?}");
+        let listed: HashSet<&str> = c.apps.iter().map(|a| a.name.as_str()).collect();
+        let stale: Vec<&String> = seen
+            .iter()
+            .filter(|n| !listed.contains(n.as_str()))
+            .collect();
+        assert!(stale.is_empty(), "not in apps.toml: {stale:?}");
+        assert_eq!(category_of("nothing-like-this"), OTHER_CATEGORY);
     }
 
     #[test]

@@ -4,6 +4,7 @@ Sets up and updates a CachyOS install: a Rust binary with a ratatui TUI and a he
 
 ## Layout
 
+- `categories.toml` the built-in package-name to category map for the app list's `f` grouping; a test fails when a shipped app is unmapped or a mapped name is not shipped.
 - `apps.toml` the app and tweak list, compiled in and copied to `~/.config/cachyup/apps.toml` on first launch; the copy is what runs. `src/catalog.rs` parses it, `src/apps_edit.rs` merges entries into the user's copy without touching its layout (toml_edit).
 - `src/config.rs` (config.toml, `UPDATE_STEPS`, `NUMBER_SETTINGS`, holds the selection), `src/selection.rs` (on/off per app/tweak under `[apps]`/`[tweaks]` in config.toml, launch reconciliation), `src/state.rs` (reviewed and dismissed entries, managed apps). `src/discover.rs` finds what a review can offer: explicitly installed packages and flatpaks not in the list, with machine-specific ones (kernels, drivers, firmware) set aside, and built-in entries the list lacks.
 - `src/engine/` the core: `plan.rs` builds the ordered steps, `steps.rs` holds every step body, `ctx.rs` runs commands (streamed, dry-run aware), `runner.rs` the worker thread, `record.rs` run.json.

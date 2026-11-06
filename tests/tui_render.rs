@@ -271,3 +271,20 @@ fn settings_pane_and_review_screen_render() {
         app.key_for_test(key(KeyCode::Esc));
     }
 }
+
+#[test]
+fn f_groups_the_app_list_by_category() {
+    let (_dir, state) = sandbox();
+    let mut app = App::new(state, false, false);
+    app.key_for_test(key(KeyCode::Down));
+    app.key_for_test(key(KeyCode::Char('c')));
+    app.key_for_test(key(KeyCode::Char('f')));
+    app.key_for_test(key(KeyCode::Home));
+    let text = render(&mut app, 120, 50);
+    assert!(text.contains("Developer Tools"), "{text}");
+    assert!(text.contains("by source"), "{text}");
+    app.key_for_test(key(KeyCode::Char('f')));
+    app.key_for_test(key(KeyCode::Home));
+    let text = render(&mut app, 120, 50);
+    assert!(text.contains("Pacman packages"), "{text}");
+}

@@ -11,7 +11,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
 
 use crate::app::AppState;
-use crate::catalog::{App, Source};
+use crate::catalog::{App, Source, categories, category_of};
 use crate::config::{NUMBER_SETTINGS, UPDATE_STEPS};
 use crate::engine::edit::{tweak_applied, tweak_current};
 use crate::system::{InfoMap, has_cmd};
@@ -175,6 +175,8 @@ pub struct MainScreen {
     filtering: bool,
     /// Show a description line under every app and tweak.
     show_desc: bool,
+    /// Group apps by category (`f`) rather than by package source.
+    by_category: bool,
     /// (installed, new in cachyup) waiting for a review; shown in Settings.
     review_counts: (usize, usize),
     tweak_status: HashMap<String, bool>,
@@ -195,6 +197,7 @@ impl MainScreen {
             filter: TextInput::default(),
             filtering: false,
             show_desc: app.config.settings.show_descriptions,
+            by_category: app.config.settings.group_by_category,
             review_counts: (0, 0),
             tweak_status: HashMap::new(),
             tweak_current: HashMap::new(),
@@ -287,13 +290,13 @@ impl MainScreen {
             }
             Task::Apps => {
                 let mut rows = Vec::new();
-                for source in Source::ALL {
-                    let apps: Vec<&App> = app
-                        .catalog
-                        .apps_from(source)
+                for (heading, apps) in self.groups(app) {
+                    let apps: Vec<&App> = apps
+                        .into_iter()
                         .filter(|a| {
                             matches(&a.name)
                                 || matches(a.display_name())
+                                || matches(&heading)
                                 || app.catalog.tweaks_for(&a.key()).any(|t| matches(&t.name))
                         })
                         .collect();
@@ -307,11 +310,7 @@ impl MainScreen {
                         .iter()
                         .filter(|a| app.config.selection.app_on(&a.key()))
                         .count();
-                    rows.push(Row::Header(format!(
-                        "{}  {on}/{}",
-                        source.heading(),
-                        apps.len()
-                    )));
+                    rows.push(Row::Header(format!("{heading}  {on}/{}", apps.len())));
                     for a in apps {
                         let key = a.key();
                         self.push_row(&mut rows, Row::App(key.clone()));
@@ -348,6 +347,49 @@ impl MainScreen {
                 rows
             }
         }
+    }
+
+    /// The app list's groups in display order: one per package source, or
+    /// one per category (apps sorted by name, "Other" last) with `f`.
+    fn groups<'a>(&self, app: &'a AppState) -> Vec<(String, Vec<&'a App>)> {
+        if !self.by_category {
+            return Source::ALL
+                .iter()
+                .map(|s| (s.heading().to_string(), app.catalog.apps_from(*s).collect()))
+                .collect();
+        }
+        let mut groups: Vec<(String, Vec<&App>)> = categories()
+            .into_iter()
+            .map(|(c, _)| (c, Vec::new()))
+            .chain(std::iter::once((
+                crate::catalog::OTHER_CATEGORY.to_string(),
+                Vec::new(),
+            )))
+            .collect();
+        for a in &app.catalog.apps {
+            let c = category_of(&a.name);
+            if let Some((_, apps)) = groups.iter_mut().find(|(name, _)| *name == c) {
+                apps.push(a);
+            }
+        }
+        for (_, apps) in &mut groups {
+            apps.sort_by_key(|a| a.display_name().to_lowercase());
+        }
+        groups
+    }
+
+    /// `f`: group by category or by source, keeping the cursor on its row.
+    fn toggle_grouping(&mut self, app: &mut AppState) -> Vec<Effect> {
+        let rows = self.rows(app);
+        let current = rows.get(self.cursor[self.task]).cloned();
+        self.by_category = !self.by_category;
+        let rows = self.rows(app);
+        if let Some(i) = current.and_then(|c| rows.iter().position(|r| *r == c)) {
+            self.cursor[self.task] = i;
+        }
+        self.snap_cursor(app);
+        app.config.settings.group_by_category = self.by_category;
+        vec![Effect::SaveConfig]
     }
 
     /// Add an app or tweak row, with its description line when those are shown.
@@ -543,6 +585,9 @@ impl MainScreen {
             }
             Action::Char('A') if self.current().lists_apps() => {
                 return self.toggle_all(&rows, app);
+            }
+            Action::Char('f') if self.current() == Task::Apps => {
+                return self.toggle_grouping(app);
             }
             Action::Char('u') if self.current() == Task::Apps => {
                 if let Some(Row::App(key)) = rows.get(self.cursor[self.task]) {
@@ -759,6 +804,10 @@ impl MainScreen {
                     label("Source"),
                     Span::raw(a.source.label()),
                 ]));
+                body.push(Line::from(vec![
+                    label("Category"),
+                    Span::raw(category_of(&a.name)),
+                ]));
                 let (status, style) = app_status(a, app, info);
                 body.push(Line::from(vec![
                     label("Status"),
@@ -900,15 +949,23 @@ impl MainScreen {
                 Task::Apps => hints.extend([
                     ("i", "info"),
                     ("I", "descriptions"),
-                    ("a", "all in group"),
-                    ("A", "all"),
+                    ("a", "select group"),
+                    ("A", "select all"),
+                    (
+                        "f",
+                        if self.by_category {
+                            "by source"
+                        } else {
+                            "by category"
+                        },
+                    ),
                     ("u", "uninstall"),
                     ("/", "filter"),
                 ]),
                 Task::Tweaks => hints.extend([
                     ("i", "info"),
                     ("I", "descriptions"),
-                    ("A", "all"),
+                    ("A", "select all"),
                     ("/", "filter"),
                 ]),
                 Task::Settings => hints.push(("Enter", "open")),
@@ -1025,6 +1082,13 @@ impl MainScreen {
         let height = list_area.height as usize;
         self.list_height = height;
         self.offset[t] = clamp_scroll(self.cursor[t], rows.len(), height, self.offset[t]);
+        // Keep a group's heading in view when the cursor is on its first row.
+        if self.offset[t] == self.cursor[t]
+            && self.cursor[t] > 0
+            && !rows[self.cursor[t] - 1].selectable()
+        {
+            self.offset[t] -= 1;
+        }
         let width = list_area.width as usize;
         let mut lines = Vec::new();
         for (i, row) in rows.iter().enumerate().skip(self.offset[t]).take(height) {
@@ -1175,6 +1239,9 @@ impl MainScreen {
                 let (m, style) = mark(on, true);
                 let (status, status_style) = app_status(a, app, info);
                 let mut badge = Vec::new();
+                if self.by_category {
+                    badge.push(Span::styled(format!(" {}", a.source), theme::dim()));
+                }
                 if let Some(package) = a.unless_cmd.as_ref().and_then(|c| self.conditions.get(c)) {
                     badge.push(Span::styled(
                         format!(" (default off: {package} installed)"),
@@ -1289,7 +1356,7 @@ fn table_line(
     width: usize,
     indent: usize,
 ) -> Line<'static> {
-    const STATUS_WIDTH: usize = 22;
+    const STATUS_WIDTH: usize = 23;
     let name_width = width.saturating_sub(3 + STATUS_WIDTH + 2 + indent).max(8);
     let badge_width: usize = badge.iter().map(|s| s.width()).sum();
     let room = name_width.saturating_sub(badge_width);
@@ -1318,7 +1385,7 @@ pub fn app_status(a: &App, app: &AppState, info: &InfoMap) -> (String, Style) {
     let on = app.config.selection.app_on(&a.key());
     let available = info.get(&a.key()).and_then(|i| i.available);
     match app.is_installed(a) {
-        Some(true) if will_update(a, app) => ("Installed, will update".into(), theme::on()),
+        Some(true) if will_update(a, app) => ("Installed (will update)".into(), theme::on()),
         Some(true) => ("Installed".into(), theme::on()),
         Some(false) if available == Some(false) => {
             ("Unavailable".into(), Style::default().fg(theme::BAD))
@@ -1453,7 +1520,7 @@ install = "true"
         assert_eq!(status(&app, "installer/tool"), "Installed", "not selected");
         app.set_app("installer/tool", true);
         app.set_app("installer/plain", true);
-        assert_eq!(status(&app, "installer/tool"), "Installed, will update");
+        assert_eq!(status(&app, "installer/tool"), "Installed (will update)");
         assert_eq!(
             status(&app, "installer/plain"),
             "Installed",
