@@ -1373,7 +1373,8 @@ fn table_line(
         Span::styled(format!("{shown} "), name_style),
     ];
     spans.extend(badge);
-    spans.push(Span::raw(" ".repeat(pad + 2)));
+    // Dotted leader to the status column, so the eye can follow a long row.
+    spans.push(Span::styled(format!(" {} ", ".".repeat(pad)), theme::dim()));
     spans.push(Span::styled(
         format!("{status:<STATUS_WIDTH$}"),
         status_style,

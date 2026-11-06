@@ -29,9 +29,11 @@ pub fn selected() -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
-/// The cursor row in a pane without focus.
+/// The cursor row in a pane without focus: the same background, faded.
 pub fn selected_inactive() -> Style {
-    Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+    Style::default()
+        .bg(Color::DarkGray)
+        .add_modifier(Modifier::DIM)
 }
 
 pub fn focused_border() -> Style {
