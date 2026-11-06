@@ -1362,10 +1362,11 @@ impl MainScreen {
             Row::Number(i) => {
                 let n = &NUMBER_SETTINGS[*i];
                 let value = (n.get)(&app.config.settings).to_string();
-                let pad = width.saturating_sub(n.label.len() + value.len() + 5);
+                // "   label  ....  value " with a leader like the app rows.
+                let pad = width.saturating_sub(n.label.len() + value.len() + 7);
                 Line::from(vec![
-                    Span::raw(format!("   {}", n.label)),
-                    Span::raw(" ".repeat(pad)),
+                    Span::raw(format!("   {} ", n.label)),
+                    Span::styled(format!(" {} ", ".".repeat(pad)), theme::leader()),
                     Span::styled(value, theme::title()),
                     Span::raw(" "),
                 ])
