@@ -6,6 +6,7 @@
 "Developer Tools" = [
     "cmake",
     "delve",
+    "fd",
     "docker",
     "docker-buildx",
     "docker-compose",

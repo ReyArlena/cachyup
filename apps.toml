@@ -50,6 +50,7 @@ pacman = [
     "evolution-ews",
     "evtest",
     "eyedropper",
+    "fd",
     "filelight",
     "filezilla",
     "fio",

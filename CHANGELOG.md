@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- fd (pacman).
+
 ## [0.2.0] - 2026-11-06
 
 The app list becomes your own file, with reviews to grow it, and the interface gets a
