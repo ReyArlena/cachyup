@@ -337,7 +337,9 @@ fn add_app_appends_to_the_list() {
     let text = render(&mut app, 120, 40);
     let apps = std::fs::read_to_string(dir.path().join("config/apps.toml")).unwrap();
     assert!(!apps.contains("idsfne"), "{apps}");
-    assert!(text.contains("no package called"), "{text}");
+    // "no package called" where pacman can answer, "could not ask" on a
+    // runner without pacman. Refused either way.
+    assert!(text.contains("not added:"), "{text}");
 
     // A real repo package goes in and is switched on. Skipped when pacman
     // has no sync database here (a fresh container).
