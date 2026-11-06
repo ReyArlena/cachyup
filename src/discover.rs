@@ -81,7 +81,17 @@ pub fn installed_candidates(
     catalog: &Catalog,
     state: &State,
 ) -> Vec<Candidate> {
-    let listed: HashSet<String> = catalog.apps.iter().map(App::key).collect();
+    // Apps, plus the packages tweaks install: those are in the list too.
+    let listed: HashSet<String> = catalog
+        .apps
+        .iter()
+        .map(App::key)
+        .chain(catalog.tweaks.iter().flat_map(|t| {
+            t.installs
+                .iter()
+                .map(|p| format!("{}/{}", p.source.id(), p.name))
+        }))
+        .collect();
     let mut out = Vec::new();
     for (source, names) in [
         (Source::Pacman, &explicit.pacman),
@@ -182,7 +192,7 @@ mod tests {
         let file = dir.path().join("apps.toml");
         std::fs::write(
             &file,
-            "pacman = [\"htop\"]\nflatpak = [\"org.gnome.Chess\"]\n",
+            "pacman = [\"htop\"]\nflatpak = [\"org.gnome.Chess\"]\n\n[[tweak]]\nid = \"t\"\napp = \"pacman/htop\"\nname = \"T\"\ninstalls = [\"yay\", \"aur/extra\"]\n",
         )
         .unwrap();
         let catalog = Catalog::load(&file);
@@ -193,7 +203,7 @@ mod tests {
                 .into_iter()
                 .map(String::from)
                 .collect(),
-            aur: vec!["spotify".into()],
+            aur: vec!["spotify".into(), "extra".into()],
             flatpak: vec!["org.gnome.Chess".into(), "com.example.App".into()],
             kernels: ["linux-cachyos".to_string()].into_iter().collect(),
         };
