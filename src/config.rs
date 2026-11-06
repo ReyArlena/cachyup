@@ -136,6 +136,8 @@ pub struct Settings {
     pub show_descriptions: bool,
     /// Group the app list by category instead of package source (`f`).
     pub group_by_category: bool,
+    /// Drop the project link from the header.
+    pub hide_credits: bool,
 }
 
 impl Default for Tasks {
@@ -158,6 +160,7 @@ impl Default for Settings {
             update_check: true,
             show_descriptions: false,
             group_by_category: false,
+            hide_credits: false,
         }
     }
 }

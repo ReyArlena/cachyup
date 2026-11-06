@@ -30,24 +30,55 @@ pub enum Task {
     Update,
     Apps,
     Tweaks,
-    /// Not a task: the app list itself (edit, add, review).
-    Settings,
+    /// Settings box: numbers and interface toggles.
+    General,
+    /// Settings box: placeholder for editing the list in the app.
+    EditList,
+    OpenEditor,
+    AddApp,
+    ReviewInstalled,
+    ReviewBuiltin,
 }
 
 impl Task {
-    pub const ALL: [Task; 4] = [Task::Update, Task::Apps, Task::Tweaks, Task::Settings];
+    /// Sidebar order: the Tasks box, then the Settings box.
+    pub const ALL: [Task; 9] = [
+        Task::Update,
+        Task::Apps,
+        Task::Tweaks,
+        Task::General,
+        Task::EditList,
+        Task::OpenEditor,
+        Task::AddApp,
+        Task::ReviewInstalled,
+        Task::ReviewBuiltin,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
             Task::Update => crate::engine::plan::TASK_UPDATE,
             Task::Apps => crate::engine::plan::TASK_APPS,
             Task::Tweaks => crate::engine::plan::TASK_TWEAKS,
-            Task::Settings => "App list",
+            Task::General => "General",
+            Task::EditList => "Edit apps list",
+            Task::OpenEditor => "Open apps list in editor",
+            Task::AddApp => "Add app",
+            Task::ReviewInstalled => "Review new installs",
+            Task::ReviewBuiltin => "Review new suggestions",
         }
     }
 
+    /// In the Tasks box, with an on/off switch.
     fn is_task(self) -> bool {
-        self != Task::Settings
+        matches!(self, Task::Update | Task::Apps | Task::Tweaks)
+    }
+
+    /// Has a list of options in the right pane.
+    fn has_options(self) -> bool {
+        matches!(
+            self,
+            Task::Update | Task::Apps | Task::Tweaks | Task::General
+        )
     }
 
     /// Apps and Tweaks: the panes with filter, descriptions and toggle-all.
@@ -66,8 +97,23 @@ impl Task {
             Task::Tweaks => {
                 "Apply config tweaks for your apps. Each is skipped while its app is not installed. c to choose tweaks."
             }
-            Task::Settings => {
-                "Your app list (~/.config/cachyup/apps.toml): edit it, add an app, or review what could be added. c to open."
+            Task::General => {
+                "Numbers the cleanup uses and how the app list looks. c to change them."
+            }
+            Task::EditList => {
+                "Editing the list inside cachyup is not here yet. Use your editor for now."
+            }
+            Task::OpenEditor => {
+                "Opens ~/.config/cachyup/apps.toml in $VISUAL, $EDITOR or xdg-open, and re-reads it when you are done."
+            }
+            Task::AddApp => {
+                "One app by name: a pacman package, aur/name or flatpak/id. Appended to apps.toml and switched on."
+            }
+            Task::ReviewInstalled => {
+                "Explicitly installed packages and flatpak apps that are not in your list. Tick the ones to add; kernels, drivers and firmware are set aside behind s."
+            }
+            Task::ReviewBuiltin => {
+                "Entries cachyup ships that your list lacks. Tick the ones to add; the rest are not offered again."
             }
         }
     }
@@ -78,7 +124,7 @@ impl Task {
             Task::Update => t.update,
             Task::Apps => t.apps,
             Task::Tweaks => t.tweaks,
-            Task::Settings => true,
+            _ => true,
         }
     }
 
@@ -88,51 +134,61 @@ impl Task {
             Task::Update => t.update = on,
             Task::Apps => t.apps = on,
             Task::Tweaks => t.tweaks = on,
-            Task::Settings => {}
+            _ => {}
         }
     }
 }
 
-/// The rows of the Settings pane.
+/// On/off settings on the General page.
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Setting {
-    Edit,
-    Add,
-    ReviewInstalled,
-    ReviewBuiltin,
+enum Toggle {
+    ShowDescriptions,
+    GroupByCategory,
+    HideCredits,
 }
 
-impl Setting {
-    const ALL: [Setting; 4] = [
-        Setting::Edit,
-        Setting::Add,
-        Setting::ReviewInstalled,
-        Setting::ReviewBuiltin,
+impl Toggle {
+    const ALL: [Toggle; 3] = [
+        Toggle::ShowDescriptions,
+        Toggle::GroupByCategory,
+        Toggle::HideCredits,
     ];
 
     fn label(self) -> &'static str {
         match self {
-            Setting::Edit => "Edit the app list in your editor",
-            Setting::Add => "Add an app by name",
-            Setting::ReviewInstalled => "Review apps installed on this machine",
-            Setting::ReviewBuiltin => "Review what is new in cachyup",
+            Toggle::ShowDescriptions => "Show descriptions in the app list",
+            Toggle::GroupByCategory => "Group the app list by category",
+            Toggle::HideCredits => "Hide credits",
         }
     }
 
     fn help(self) -> &'static str {
         match self {
-            Setting::Edit => {
-                "Opens ~/.config/cachyup/apps.toml in $VISUAL, $EDITOR or xdg-open, and re-reads it when you are done"
+            Toggle::ShowDescriptions => {
+                "A description line under every app and tweak (I in the list does the same)"
             }
-            Setting::Add => {
-                "A pacman name, aur/name or flatpak/id. Appended to apps.toml and switched on"
+            Toggle::GroupByCategory => {
+                "Developer Tools, Gaming, ... instead of pacman, AUR, flatpak (f in the list does the same)"
             }
-            Setting::ReviewInstalled => {
-                "Explicitly installed packages and flatpaks that are not in your list: tick the ones to add. Kernels, drivers and firmware are set aside"
-            }
-            Setting::ReviewBuiltin => {
-                "Entries cachyup ships that your list lacks: tick the ones to add, the rest are not offered again"
-            }
+            Toggle::HideCredits => "Drop the project link from the header",
+        }
+    }
+
+    fn get(self, app: &AppState) -> bool {
+        let s = &app.config.settings;
+        match self {
+            Toggle::ShowDescriptions => s.show_descriptions,
+            Toggle::GroupByCategory => s.group_by_category,
+            Toggle::HideCredits => s.hide_credits,
+        }
+    }
+
+    fn set(self, app: &mut AppState, on: bool) {
+        let s = &mut app.config.settings;
+        match self {
+            Toggle::ShowDescriptions => s.show_descriptions = on,
+            Toggle::GroupByCategory => s.group_by_category = on,
+            Toggle::HideCredits => s.hide_credits = on,
         }
     }
 }
@@ -153,7 +209,7 @@ enum Row {
         id: String,
         nested: bool,
     },
-    Setting(Setting),
+    Toggle(Toggle),
     Blank,
     /// The description line under an app or tweak (`I`).
     Desc(Box<Row>),
@@ -169,8 +225,8 @@ pub struct MainScreen {
     focus: usize,
     task: usize,
     /// Cursor and scroll per task.
-    cursor: [usize; 4],
-    offset: [usize; 4],
+    cursor: [usize; 9],
+    offset: [usize; 9],
     filter: TextInput,
     filtering: bool,
     /// Show a description line under every app and tweak.
@@ -192,8 +248,8 @@ impl MainScreen {
         let mut s = Self {
             focus: PANE_TASKS,
             task: 0,
-            cursor: [0; 4],
-            offset: [0; 4],
+            cursor: [0; 9],
+            offset: [0; 9],
             filter: TextInput::default(),
             filtering: false,
             show_desc: app.config.settings.show_descriptions,
@@ -250,11 +306,20 @@ impl MainScreen {
         Task::ALL[self.task]
     }
 
-    /// Jump to the Settings pane.
-    pub fn open_settings(&mut self, app: &AppState) {
-        self.task = Task::ALL.len() - 1;
-        self.focus = PANE_OPTIONS;
-        self.snap_cursor(app);
+    /// Jump to the review entry that has something waiting.
+    pub fn open_settings(&mut self, _app: &AppState) {
+        let target = if self.review_counts.0 > 0 {
+            Task::ReviewInstalled
+        } else {
+            Task::ReviewBuiltin
+        };
+        self.task = Task::ALL.iter().position(|t| *t == target).unwrap_or(0);
+        self.focus = PANE_TASKS;
+    }
+
+    /// (installed and not reviewed, new in cachyup), for the header.
+    pub fn review_counts(&self) -> (usize, usize) {
+        self.review_counts
     }
 
     fn rows(&self, app: &AppState) -> Vec<Row> {
@@ -264,9 +329,6 @@ impl MainScreen {
             Task::Update => {
                 let mut rows = vec![Row::Header("Steps".into())];
                 rows.extend((0..UPDATE_STEPS.len()).map(Row::Step));
-                rows.push(Row::Blank);
-                rows.push(Row::Header("Settings".into()));
-                rows.extend((0..NUMBER_SETTINGS.len()).map(Row::Number));
                 rows.push(Row::Blank);
                 rows.push(Row::Header("Always run".into()));
                 rows.push(Row::Fixed(
@@ -283,9 +345,12 @@ impl MainScreen {
                 ));
                 rows
             }
-            Task::Settings => {
-                let mut rows = vec![Row::Header("Your app list".into())];
-                rows.extend(Setting::ALL.iter().map(|s| Row::Setting(*s)));
+            Task::General => {
+                let mut rows = vec![Row::Header("Numbers".into())];
+                rows.extend((0..NUMBER_SETTINGS.len()).map(Row::Number));
+                rows.push(Row::Blank);
+                rows.push(Row::Header("Interface".into()));
+                rows.extend(Toggle::ALL.iter().map(|t| Row::Toggle(*t)));
                 rows
             }
             Task::Apps => {
@@ -346,6 +411,7 @@ impl MainScreen {
                 }
                 rows
             }
+            _ => Vec::new(),
         }
     }
 
@@ -484,13 +550,35 @@ impl MainScreen {
             | Action::Right
             | Action::NextPane
             | Action::Toggle => {
-                self.focus = PANE_OPTIONS;
-                self.snap_cursor(app);
+                let t = self.current();
+                if t.has_options() {
+                    self.focus = PANE_OPTIONS;
+                    self.snap_cursor(app);
+                } else if action != Action::NextPane {
+                    return self.activate(t);
+                }
             }
             Action::Back => return vec![Effect::Quit],
             _ => {}
         }
         Vec::new()
+    }
+
+    /// Enter on a Settings entry that acts rather than opens a list.
+    fn activate(&self, task: Task) -> Vec<Effect> {
+        match task {
+            Task::EditList => vec![Effect::Toast("not here yet: use your editor".into())],
+            Task::OpenEditor => vec![Effect::EditApps],
+            Task::AddApp => vec![Effect::Modal(Modal::input(
+                "Add an app",
+                "A pacman package name, aur/name or flatpak/id.\nIt is appended to apps.toml and switched on.",
+                "",
+                "add-app",
+            ))],
+            Task::ReviewInstalled => vec![Effect::Review(ReviewKind::Installed)],
+            Task::ReviewBuiltin => vec![Effect::Review(ReviewKind::Builtin)],
+            _ => Vec::new(),
+        }
     }
 
     /// Put the cursor on a selectable row.
@@ -648,17 +736,13 @@ impl MainScreen {
                 ))]
             }
             Row::Fixed(..) => vec![Effect::Toast("always runs".into())],
-            Row::Setting(Setting::Edit) => vec![Effect::EditApps],
-            Row::Setting(Setting::Add) => vec![Effect::Modal(Modal::input(
-                "Add an app",
-                "A pacman package name, aur/name or flatpak/id.\nIt is appended to apps.toml and switched on.",
-                "",
-                "add-app",
-            ))],
-            Row::Setting(Setting::ReviewInstalled) => {
-                vec![Effect::Review(ReviewKind::Installed)]
+            Row::Toggle(t) => {
+                let on = !t.get(app);
+                t.set(app, on);
+                self.show_desc = app.config.settings.show_descriptions;
+                self.by_category = app.config.settings.group_by_category;
+                vec![Effect::SaveConfig]
             }
-            Row::Setting(Setting::ReviewBuiltin) => vec![Effect::Review(ReviewKind::Builtin)],
             Row::App(key) => {
                 let on = app.config.selection.app_on(key);
                 app.set_app(key, !on);
@@ -968,7 +1052,8 @@ impl MainScreen {
                     ("A", "select all"),
                     ("/", "filter"),
                 ]),
-                Task::Settings => hints.push(("Enter", "open")),
+                Task::General => {}
+                _ => hints.push(("Enter", "open")),
             }
             hints.push(("Esc", "back"));
         }
@@ -994,71 +1079,19 @@ impl MainScreen {
     /// box holding the cursor gets the focused border.
     fn draw_tasks(&self, frame: &mut Frame, area: Rect, app: &AppState, hits: &mut HitMap) {
         let focused = self.focus == PANE_TASKS;
-        let tasks: Vec<(usize, Task)> = Task::ALL
-            .iter()
-            .copied()
-            .enumerate()
-            .filter(|(_, t)| t.is_task())
-            .collect();
-        let settings: Vec<(usize, Task)> = Task::ALL
-            .iter()
-            .copied()
-            .enumerate()
-            .filter(|(_, t)| !t.is_task())
-            .collect();
-        // Three lines per entry (label, summary, blank), minus the last blank.
-        let height = |n: usize| (n * 3).saturating_sub(1) as u16 + 2;
-        let [tasks_area, settings_area] = Layout::vertical([
-            Constraint::Length(height(tasks.len())),
-            Constraint::Min(height(settings.len())),
-        ])
-        .areas(area);
+        let settings = Task::ALL.iter().filter(|t| !t.is_task()).count() as u16;
+        let [tasks_area, settings_area] =
+            Layout::vertical([Constraint::Min(5), Constraint::Length(settings + 2)]).areas(area);
         hits.add(area, Hit::Pane(PANE_TASKS));
-        let in_settings = !Task::ALL[self.task].is_task();
-        self.draw_sidebar_box(
-            frame,
-            tasks_area,
-            "Tasks",
-            focused && !in_settings,
-            focused,
-            &tasks,
-            app,
-            hits,
-        );
-        self.draw_sidebar_box(
-            frame,
-            settings_area,
-            "Settings",
-            focused && in_settings,
-            focused,
-            &settings,
-            app,
-            hits,
-        );
-    }
+        let in_settings = !self.current().is_task();
 
-    #[allow(clippy::too_many_arguments)]
-    fn draw_sidebar_box(
-        &self,
-        frame: &mut Frame,
-        area: Rect,
-        title: &str,
-        border_focused: bool,
-        pane_focused: bool,
-        entries: &[(usize, Task)],
-        app: &AppState,
-        hits: &mut HitMap,
-    ) {
-        let block = pane_block(title, border_focused);
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-
+        // Tasks: label, summary, blank line.
+        let block = pane_block("Tasks", focused && !in_settings);
+        let inner = block.inner(tasks_area);
+        frame.render_widget(block, tasks_area);
         let mut lines = Vec::new();
-        for (i, task) in entries {
-            let on = task.on(app);
-            let (mark, style) = if !task.is_task() {
-                ("▸", theme::heading())
-            } else if on {
+        for (i, task) in Task::ALL.iter().enumerate().filter(|(_, t)| t.is_task()) {
+            let (mark, style) = if task.on(app) {
                 ("✓", theme::on())
             } else {
                 ("✗", theme::off())
@@ -1067,12 +1100,8 @@ impl MainScreen {
                 Span::styled(format!(" {mark} "), style),
                 Span::styled(format!("{} ", task.label()), style),
             ]);
-            if *i == self.task {
-                line = line.style(if pane_focused {
-                    theme::selected()
-                } else {
-                    theme::selected_inactive()
-                });
+            if i == self.task {
+                line = line.style(self.cursor_style());
             }
             let y = inner.y + lines.len() as u16;
             if y < inner.y + inner.height {
@@ -1080,7 +1109,7 @@ impl MainScreen {
                     Rect::new(inner.x, y, inner.width, 2),
                     Hit::Row {
                         pane: PANE_TASKS,
-                        index: *i,
+                        index: i,
                     },
                 );
             }
@@ -1092,6 +1121,55 @@ impl MainScreen {
             lines.push(Line::from(""));
         }
         frame.render_widget(Paragraph::new(lines), inner);
+
+        // Settings: one line each, review entries with their count.
+        let block = pane_block("Settings", focused && in_settings);
+        let inner = block.inner(settings_area);
+        frame.render_widget(block, settings_area);
+        let (installed, builtin) = self.review_counts;
+        let mut lines = Vec::new();
+        for (i, task) in Task::ALL.iter().enumerate().filter(|(_, t)| !t.is_task()) {
+            let style = if *task == Task::EditList {
+                theme::dim()
+            } else {
+                Style::default()
+            };
+            let mut spans = vec![Span::styled(format!(" {} ", task.label()), style)];
+            let count = match task {
+                Task::ReviewInstalled => Some(installed),
+                Task::ReviewBuiltin => Some(builtin),
+                _ => None,
+            };
+            match count {
+                Some(0) => spans.push(Span::styled("(0) ", theme::dim())),
+                Some(n) => spans.push(Span::styled(format!("({n}) "), theme::attention())),
+                None => {}
+            }
+            let mut line = Line::from(spans);
+            if i == self.task {
+                line = line.style(self.cursor_style());
+            }
+            let y = inner.y + lines.len() as u16;
+            if y < inner.y + inner.height {
+                hits.add(
+                    Rect::new(inner.x, y, inner.width, 1),
+                    Hit::Row {
+                        pane: PANE_TASKS,
+                        index: i,
+                    },
+                );
+            }
+            lines.push(line);
+        }
+        frame.render_widget(Paragraph::new(lines), inner);
+    }
+
+    fn cursor_style(&self) -> Style {
+        if self.focus == PANE_TASKS {
+            theme::selected()
+        } else {
+            theme::selected_inactive()
+        }
     }
 
     fn draw_options(
@@ -1112,6 +1190,31 @@ impl MainScreen {
         let inner = block.inner(area);
         frame.render_widget(block, area);
         hits.add(area, Hit::Pane(PANE_OPTIONS));
+
+        // An entry that acts on Enter: say what it does and where it stands.
+        if !self.current().has_options() {
+            let (installed, builtin) = self.review_counts;
+            let mut lines = vec![
+                Line::from(""),
+                Line::from(format!(" {}", self.current().help())),
+                Line::from(""),
+            ];
+            let standing = match self.current() {
+                Task::ReviewInstalled => Some(format!(
+                    " {installed} installed since your last review. Enter opens the review."
+                )),
+                Task::ReviewBuiltin => Some(format!(
+                    " {builtin} new in cachyup's list. Enter opens the review."
+                )),
+                Task::EditList => None,
+                _ => Some(" Enter to open.".into()),
+            };
+            if let Some(text) = standing {
+                lines.push(Line::from(Span::styled(text, theme::dim())));
+            }
+            frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
+            return;
+        }
 
         let filter_rows = if self.filtering || !self.filter.value.is_empty() {
             1
@@ -1272,20 +1375,10 @@ impl MainScreen {
                 Span::styled(name.to_string(), theme::dim()),
                 Span::styled("  (always)", theme::dim()),
             ]),
-            Row::Setting(s) => {
-                let (installed, builtin) = self.review_counts;
-                let count = match s {
-                    Setting::ReviewInstalled => Some(installed),
-                    Setting::ReviewBuiltin => Some(builtin),
-                    _ => None,
-                };
-                let mut spans = vec![Span::raw(" ▸ "), Span::raw(format!("{} ", s.label()))];
-                match count {
-                    Some(0) => spans.push(Span::styled("  (nothing new)", theme::dim())),
-                    Some(n) => spans.push(Span::styled(format!("  ({n})"), theme::on())),
-                    None => {}
-                }
-                Line::from(spans)
+            Row::Toggle(t) => {
+                let on = t.get(app);
+                let (m, style) = mark(on, true);
+                Line::from(vec![m, Span::styled(format!("{} ", t.label()), style)])
             }
             Row::App(key) => {
                 let Some(a) = app.catalog.app(key) else {
@@ -1370,7 +1463,7 @@ impl MainScreen {
             Row::Step(i) => UPDATE_STEPS[*i].help.to_string(),
             Row::Number(i) => format!("{} (Enter to change)", NUMBER_SETTINGS[*i].help),
             Row::Fixed(_, help) => help.to_string(),
-            Row::Setting(s) => format!("{} (Enter to open)", s.help()),
+            Row::Toggle(t) => t.help().to_string(),
             Row::App(_) => match describe(row, app, info) {
                 Some(d) => format!("{d}  (i for details)"),
                 None if info.is_empty() => "Reading package info...".into(),
@@ -1516,13 +1609,7 @@ fn task_summary(task: Task, app: &AppState) -> String {
                 .count();
             format!("{on} of {} selected", app.catalog.tweaks.len())
         }
-        Task::Settings => {
-            let (installed, builtin) = review_counts(app);
-            match installed + builtin {
-                0 => "nothing to review".into(),
-                n => format!("{n} to review"),
-            }
-        }
+        _ => String::new(),
     }
 }
 

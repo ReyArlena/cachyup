@@ -59,6 +59,11 @@ pub fn on() -> Style {
     Style::default().fg(ON)
 }
 
+/// Something waiting for the user: a review count, a header notice.
+pub fn attention() -> Style {
+    Style::default().fg(WARN)
+}
+
 pub fn off() -> Style {
     dim()
 }

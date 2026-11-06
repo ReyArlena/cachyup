@@ -65,6 +65,8 @@ pub struct App {
     /// Descriptions for the open review, fetched in the background.
     review_info_rx: Option<Receiver<InfoMap>>,
     update_rx: Option<Receiver<String>>,
+    /// A newer release, once the check has answered. Shown in the header.
+    latest_release: Option<String>,
     sudo: bool,
     /// Started with --dry-run: real runs are off.
     dry_only: bool,
@@ -112,6 +114,7 @@ impl App {
             info,
             info_rx: Some(info_rx),
             review_info_rx: None,
+            latest_release: None,
             update_rx,
             sudo,
             dry_only,
@@ -307,6 +310,7 @@ impl App {
             && let Ok(latest) = rx.try_recv()
         {
             self.update_rx = None;
+            self.latest_release = Some(latest.clone());
             let modal = Modal::new(
                 "Update available",
                 Modal::text(&format!(
@@ -832,7 +836,7 @@ impl App {
         let area = frame.area();
         let keys = self.key_hints();
         let [bar, body, hints] = Layout::vertical([
-            Constraint::Length(1),
+            Constraint::Length(3),
             Constraint::Min(3),
             Constraint::Length(key_hint_rows(&keys, area.width) + 2),
         ])
@@ -893,7 +897,21 @@ impl App {
         }
     }
 
+    /// The header box: name and version, sudo state, then notices on the
+    /// right. The project link sits on the bottom border unless hidden.
     fn draw_status_bar(&self, frame: &mut ratatui::Frame, area: Rect) {
+        use ratatui::widgets::{Block, Borders};
+        let mut block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(theme::border());
+        if !self.state.config.settings.hide_credits {
+            block = block.title_bottom(
+                Line::from(Span::styled(format!(" {CREDITS} "), theme::dim())).right_aligned(),
+            );
+        }
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
         let mut spans = vec![
             Span::styled(
                 format!(" cachyup v{} ", env!("CARGO_PKG_VERSION")),
@@ -918,9 +936,37 @@ impl App {
         if self.info_rx.is_some() {
             spans.push(Span::styled("reading package info...", theme::dim()));
         }
-        frame.render_widget(Paragraph::new(Line::from(spans)), area);
+        frame.render_widget(Paragraph::new(Line::from(spans)), inner);
+
+        // Notices, right-aligned, pipe-separated.
+        let mut notices: Vec<Span> = Vec::new();
+        let (installed, builtin) = self.main.review_counts();
+        if installed + builtin > 0 {
+            notices.push(Span::styled("Please review new apps", theme::attention()));
+        }
+        if let Some(latest) = &self.latest_release {
+            notices.push(Span::styled(
+                format!("v{latest} available: cachyup update"),
+                theme::attention(),
+            ));
+        }
+        if notices.is_empty() {
+            return;
+        }
+        let mut line: Vec<Span> = Vec::new();
+        for (i, n) in notices.into_iter().enumerate() {
+            if i > 0 {
+                line.push(Span::styled(" │ ", theme::dim()));
+            }
+            line.push(n);
+        }
+        line.push(Span::raw(" "));
+        frame.render_widget(Paragraph::new(Line::from(line)).right_aligned(), inner);
     }
 }
+
+/// On the header's bottom border, unless hidden in General.
+const CREDITS: &str = "github.com/ReyArlena";
 
 /// Popups for the start of a session, shown one after another.
 fn startup_modals(state: &AppState) -> Vec<Modal> {

@@ -222,22 +222,23 @@ fn settings_pane_and_review_screen_render() {
     if text.contains("To review") {
         app.key_for_test(key(KeyCode::Esc));
     }
-    // Down to Settings and into it.
+    // Down to General and into it: the numbers and the toggles.
     for _ in 0..3 {
         app.key_for_test(key(KeyCode::Down));
     }
     app.key_for_test(key(KeyCode::Char('c')));
     let text = render(&mut app, 120, 40);
-    assert!(text.contains("Edit the app list in your editor"), "{text}");
-    assert!(
-        text.contains("Review apps installed on this machine"),
-        "{text}"
-    );
+    assert!(text.contains("Hide credits"), "{text}");
+    assert!(text.contains("Mirror rating cooldown"), "{text}");
+    assert!(text.contains("github.com/ReyArlena"), "{text}");
+    assert!(text.contains("Review new installs"), "{text}");
+    app.key_for_test(key(KeyCode::Esc));
 
-    // Third row: the installed review. Whatever this machine has, the
-    // screen must open and close cleanly.
-    app.key_for_test(key(KeyCode::Down));
-    app.key_for_test(key(KeyCode::Down));
+    // Four entries further: the installed review. Whatever this machine
+    // has, the screen must open and close cleanly.
+    for _ in 0..4 {
+        app.key_for_test(key(KeyCode::Down));
+    }
     app.key_for_test(key(KeyCode::Enter));
     assert_eq!(app.screen_name_for_test(), "review");
     let text = render(&mut app, 120, 40);
