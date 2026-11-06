@@ -14,6 +14,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shares) and setting it as the default file manager.
 - Photocraft (AUR).
 - Lerd (installer), with `lerd update` for the installer updates step.
+- Sushi is now a tweak under Nautilus ("Quick file preview"), as the add-on it is, rather
+  than a package of its own.
 - Tweaks can run a shell command with `run`, guarded by a `check` command whose exit 0
   means it is done. For settings no file write reaches (`xdg-mime`, `gsettings`,
   `systemctl --user`). Runs after `installs` and `set`, never with sudo.

@@ -6,10 +6,8 @@ use ratatui::style::{Color, Modifier, Style};
 use crate::engine::Status;
 
 pub const ACCENT: Color = Color::Cyan;
-/// Faded text: descriptions, off entries, leaders. Gray (ANSI 7) rather
-/// than DarkGray (ANSI 8), which many dark themes draw almost on the
-/// background, and which the cursor row uses as its background.
-pub const DIM: Color = Color::Gray;
+/// Lines and leaders: dark grey, quieter than any text.
+pub const DIM: Color = Color::DarkGray;
 pub const ON: Color = Color::Green;
 pub const OK: Color = Color::Green;
 pub const WARN: Color = Color::Yellow;
@@ -45,8 +43,11 @@ pub fn border() -> Style {
     Style::default().fg(DIM)
 }
 
+/// Secondary text: descriptions, subtext, off entries. The terminal's
+/// faint rendering of the normal text colour, so every theme gets a grey
+/// that fits, and it stays readable on the cursor row.
 pub fn dim() -> Style {
-    Style::default().fg(DIM)
+    Style::default().add_modifier(Modifier::DIM)
 }
 
 /// The dotted leader between a name and its status: quieter than text.
@@ -96,7 +97,7 @@ pub fn toast() -> Style {
 
 /// Secondary text that still has to be readable.
 pub fn help() -> Style {
-    Style::default().fg(Color::Gray)
+    dim()
 }
 
 pub fn key() -> Style {

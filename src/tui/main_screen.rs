@@ -1009,7 +1009,7 @@ impl MainScreen {
             };
             let mut line = Line::from(vec![
                 Span::styled(format!(" {mark} "), style),
-                Span::styled(task.label(), style),
+                Span::styled(format!("{} ", task.label()), style),
             ]);
             if i == self.task {
                 line = line.style(if focused {
@@ -1190,7 +1190,7 @@ impl MainScreen {
                 let step = &UPDATE_STEPS[*i];
                 let enabled = step.needs.is_none_or(|n| app.config.step_enabled(n));
                 let (m, style) = mark(app.config.step_on(step.id), enabled);
-                let mut spans = vec![m, Span::styled(step.label, style)];
+                let mut spans = vec![m, Span::styled(format!("{} ", step.label), style)];
                 if !enabled {
                     let needs = UPDATE_STEPS
                         .iter()
@@ -1223,7 +1223,7 @@ impl MainScreen {
                     Setting::ReviewBuiltin => Some(builtin),
                     _ => None,
                 };
-                let mut spans = vec![Span::raw(" ▸ "), Span::raw(s.label())];
+                let mut spans = vec![Span::raw(" ▸ "), Span::raw(format!("{} ", s.label()))];
                 match count {
                     Some(0) => spans.push(Span::styled("  (nothing new)", theme::dim())),
                     Some(n) => spans.push(Span::styled(format!("  ({n})"), theme::on())),
@@ -1357,7 +1357,10 @@ fn table_line(
     indent: usize,
 ) -> Line<'static> {
     const STATUS_WIDTH: usize = 23;
-    let name_width = width.saturating_sub(3 + STATUS_WIDTH + 2 + indent).max(8);
+    // 3 for the mark, 2 around the leader, 1 clear of the right border.
+    let name_width = width
+        .saturating_sub(3 + STATUS_WIDTH + 2 + 1 + indent)
+        .max(8);
     let badge_width: usize = badge.iter().map(|s| s.width()).sum();
     let room = name_width.saturating_sub(badge_width);
     let mut shown: String = name.chars().take(room.max(4)).collect();
@@ -1379,7 +1382,7 @@ fn table_line(
         theme::leader(),
     ));
     spans.push(Span::styled(
-        format!("{status:<STATUS_WIDTH$}"),
+        format!("{status:<STATUS_WIDTH$} "),
         status_style,
     ));
     Line::from(spans)

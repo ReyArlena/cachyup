@@ -108,7 +108,6 @@ pacman = [
     "stow",
     "stress-ng",
     "sunshine",
-    "sushi",
     "switcheroo",
     "tailscale",
     "telegram-desktop",
@@ -295,3 +294,10 @@ set = [
         value = "dev.duxlabs.files.desktop",
     },
 ]
+
+[[tweak]]
+id = "nautilus-sushi"
+app = "pacman/nautilus"
+name = "Quick file preview (sushi)"
+description = "Space in Nautilus previews the selected file: images, video, documents."
+installs = ["sushi"]
