@@ -421,7 +421,11 @@ impl MainScreen {
         if !self.by_category {
             return Source::ALL
                 .iter()
-                .map(|s| (s.heading().to_string(), app.catalog.apps_from(*s).collect()))
+                .map(|s| {
+                    let mut apps: Vec<&App> = app.catalog.apps_from(*s).collect();
+                    apps.sort_by_key(|a| a.display_name().to_lowercase());
+                    (s.heading().to_string(), apps)
+                })
                 .collect();
         }
         let mut groups: Vec<(String, Vec<&App>)> = categories()

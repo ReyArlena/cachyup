@@ -312,10 +312,10 @@ pub fn fetch_info(catalog: &Catalog, installed: &Installed, paths: &Paths) -> In
     if !repo.is_empty() {
         let mut args = vec!["-Si"];
         args.extend(&repo);
-        let parsed = capture_any("pacman", &args)
-            .map(|out| parse_pacman_info(&out))
-            .unwrap_or_default();
-        let ok = !parsed.is_empty();
+        // pacman ran at all: then a name it did not print is not in the repos.
+        let raw = capture_any("pacman", &args);
+        let ok = raw.is_some();
+        let parsed = raw.map(|out| parse_pacman_info(&out)).unwrap_or_default();
         for name in &repo {
             let entry = info.entry(format!("pacman/{name}")).or_default();
             if let Some(fields) = parsed.get(*name) {

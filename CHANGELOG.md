@@ -51,6 +51,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   General removes it) and notices on the right: "Please review new apps" and a newer
   release when there is one.
 - Ctrl-Up and Ctrl-Down jump to the start and end of a list, like Home and End.
+- "Add app" checks the package exists (pacman -Si, the AUR, Flathub) before adding it.
+- The app list is sorted by name within each source, so an added entry is where you
+  expect rather than at the end.
 - The help popup (`?`) names your files; `e` there opens `apps.toml` in `$VISUAL`,
   `$EDITOR` or `xdg-open`, and the list is re-read afterwards.
 

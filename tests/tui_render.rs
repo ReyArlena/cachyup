@@ -317,3 +317,41 @@ fn removed_managed_app_gets_a_popup() {
     let text = render(&mut app, 120, 40);
     assert!(text.contains("Apps removed"), "{text}");
 }
+
+#[test]
+fn add_app_appends_to_the_list() {
+    let (dir, state) = sandbox();
+    let mut app = App::new(state, false, false);
+    // Sidebar: Update, Apps, Tweaks, General, Edit, Open, Add.
+    for _ in 0..6 {
+        app.key_for_test(key(KeyCode::Down));
+    }
+    app.key_for_test(key(KeyCode::Enter));
+    let text = render(&mut app, 120, 40);
+    assert!(text.contains("Add an app"), "{text}");
+    // A name no repo has is refused.
+    for c in "idsfne-not-a-package".chars() {
+        app.key_for_test(key(KeyCode::Char(c)));
+    }
+    app.key_for_test(key(KeyCode::Enter));
+    let text = render(&mut app, 120, 40);
+    let apps = std::fs::read_to_string(dir.path().join("config/apps.toml")).unwrap();
+    assert!(!apps.contains("idsfne"), "{apps}");
+    assert!(text.contains("no package called"), "{text}");
+
+    // A real repo package goes in and is switched on. Skipped when pacman
+    // has no sync database here (a fresh container).
+    if cachyup::system::capture("pacman", &["-Si", "nano"]).is_none() {
+        return;
+    }
+    app.key_for_test(key(KeyCode::Enter));
+    for c in "nano".chars() {
+        app.key_for_test(key(KeyCode::Char(c)));
+    }
+    app.key_for_test(key(KeyCode::Enter));
+    render(&mut app, 120, 40);
+    let apps = std::fs::read_to_string(dir.path().join("config/apps.toml")).unwrap();
+    assert!(apps.contains("\"nano\""), "{apps}");
+    let config = std::fs::read_to_string(dir.path().join("config/config.toml")).unwrap();
+    assert!(config.contains("\"pacman/nano\" = true"), "{config}");
+}

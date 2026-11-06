@@ -210,12 +210,42 @@ impl App {
         self.reload_and_switch_on(&result.add)
     }
 
-    /// "Add an app by name": one package, appended and switched on.
+    /// "Add an app by name": one package, checked against its source,
+    /// appended and switched on.
     fn add_app(&mut self, spec: &str) -> Result<()> {
         let package = crate::catalog::Package::parse(spec)?;
         let key = format!("{}/{}", package.source.id(), package.name);
         if self.state.catalog.app(&key).is_some() {
             anyhow::bail!("{key} is already in the list");
+        }
+        // Ask the source the same way the list does: pacman -Si, the AUR
+        // RPC, or the Flathub listing. A name nobody has is not added.
+        let probe = crate::catalog::Catalog {
+            apps: vec![crate::catalog::App {
+                source: package.source,
+                name: package.name.clone(),
+                label: None,
+                description: None,
+                unless_cmd: None,
+                default: None,
+                installer: None,
+                origin: crate::catalog::Origin::User,
+            }],
+            ..Default::default()
+        };
+        let info = fetch_info(&probe, &self.state.installed, &self.state.paths);
+        match info.get(&key).and_then(|i| i.available) {
+            Some(true) => {}
+            Some(false) => anyhow::bail!(
+                "{} has no package called {}",
+                package.source.label(),
+                package.name
+            ),
+            None => anyhow::bail!(
+                "could not ask {} about {}; try again",
+                package.source.label(),
+                package.name
+            ),
         }
         self.state
             .merge_into_apps(&list_snippet(std::slice::from_ref(&key)), |_| true)?;
