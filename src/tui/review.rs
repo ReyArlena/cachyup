@@ -113,6 +113,20 @@ impl ReviewScreen {
                 .collect(),
         };
         let mut s = Self::from_items(kind, items);
+        // A-Z within each group, whatever order the sources gave; the
+        // groups themselves keep their order.
+        let mut groups: Vec<&'static str> = Vec::new();
+        for item in &s.items {
+            if !groups.contains(&item.group) {
+                groups.push(item.group);
+            }
+        }
+        s.items.sort_by_key(|i| {
+            (
+                groups.iter().position(|g| *g == i.group),
+                i.label.to_lowercase(),
+            )
+        });
         if kind == ReviewKind::Builtin {
             s.builtin = Some(Catalog::builtin());
         }

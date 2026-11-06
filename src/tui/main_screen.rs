@@ -379,7 +379,9 @@ impl MainScreen {
                     for a in apps {
                         let key = a.key();
                         self.push_row(&mut rows, Row::App(key.clone()));
-                        for t in app.catalog.tweaks_for(&key) {
+                        let mut tweaks: Vec<_> = app.catalog.tweaks_for(&key).collect();
+                        tweaks.sort_by_key(|t| t.name.to_lowercase());
+                        for t in tweaks {
                             self.push_row(
                                 &mut rows,
                                 Row::Tweak {
@@ -394,13 +396,29 @@ impl MainScreen {
             }
             Task::Tweaks => {
                 let mut rows = Vec::new();
-                for t in app.catalog.tweaks.iter().filter(|t| {
-                    matches(&t.name)
-                        || t.app
-                            .as_deref()
-                            .and_then(|k| app.catalog.app(k))
-                            .is_some_and(|a| matches(a.display_name()))
-                }) {
+                // Sorted as shown: "app: tweak", or the tweak name alone.
+                let shown_as = |t: &crate::catalog::Tweak| {
+                    let owner = t
+                        .app
+                        .as_deref()
+                        .and_then(|k| app.catalog.app(k))
+                        .map(|a| a.display_name().to_lowercase());
+                    (owner, t.name.to_lowercase())
+                };
+                let mut tweaks: Vec<_> = app
+                    .catalog
+                    .tweaks
+                    .iter()
+                    .filter(|t| {
+                        matches(&t.name)
+                            || t.app
+                                .as_deref()
+                                .and_then(|k| app.catalog.app(k))
+                                .is_some_and(|a| matches(a.display_name()))
+                    })
+                    .collect();
+                tweaks.sort_by_key(|t| shown_as(t));
+                for t in tweaks {
                     self.push_row(
                         &mut rows,
                         Row::Tweak {
