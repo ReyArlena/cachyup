@@ -6,7 +6,10 @@ use ratatui::style::{Color, Modifier, Style};
 use crate::engine::Status;
 
 pub const ACCENT: Color = Color::Cyan;
-pub const DIM: Color = Color::DarkGray;
+/// Faded text: descriptions, off entries, leaders. Gray (ANSI 7) rather
+/// than DarkGray (ANSI 8), which many dark themes draw almost on the
+/// background, and which the cursor row uses as its background.
+pub const DIM: Color = Color::Gray;
 pub const ON: Color = Color::Green;
 pub const OK: Color = Color::Green;
 pub const WARN: Color = Color::Yellow;
@@ -29,11 +32,9 @@ pub fn selected() -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
-/// The cursor row in a pane without focus: the same background, faded.
+/// The cursor row in a pane without focus: the same background, not bold.
 pub fn selected_inactive() -> Style {
-    Style::default()
-        .bg(Color::DarkGray)
-        .add_modifier(Modifier::DIM)
+    Style::default().bg(Color::DarkGray)
 }
 
 pub fn focused_border() -> Style {
