@@ -44,20 +44,59 @@ pub fn centered(area: Rect, width: u16, height: u16) -> Rect {
 }
 
 /// Bottom line of key hints. Each one is clickable and acts like its key.
-pub fn draw_key_hints(frame: &mut Frame, area: Rect, hints: &[(&str, &str)], hits: &mut HitMap) {
-    let mut spans: Vec<Span> = Vec::new();
-    let mut x = area.x;
+/// Width of one hint as drawn: ` key label `.
+fn hint_width(key: &str, label: &str) -> u16 {
+    (key.chars().count() + label.chars().count() + 3) as u16
+}
+
+/// How many rows the hints need inside a box `width` wide, so the box can
+/// grow on a narrow terminal instead of cutting hints off.
+pub fn key_hint_rows(hints: &[(&str, &str)], width: u16) -> u16 {
+    let inner = width.saturating_sub(2).max(1);
+    let mut rows = 1;
+    let mut x = 0;
     for (key, label) in hints {
-        let text = format!(" {key} ");
-        let width = (text.chars().count() + label.chars().count() + 1) as u16;
-        if let Some(c) = hint_char(key) {
-            hits.add(Rect::new(x, area.y, width, 1), Hit::Key(c));
+        let w = hint_width(key, label);
+        if x > 0 && x + w > inner {
+            rows += 1;
+            x = 0;
         }
-        spans.push(Span::styled(text, theme::key()));
-        spans.push(Span::styled(format!("{label} "), theme::help()));
-        x = x.saturating_add(width);
+        x += w;
     }
-    frame.render_widget(Paragraph::new(Line::from(spans)), area);
+    rows
+}
+
+/// The key hints in their own box along the bottom, wrapping onto more
+/// rows when they do not fit.
+pub fn draw_key_hints(frame: &mut Frame, area: Rect, hints: &[(&str, &str)], hits: &mut HitMap) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(theme::border());
+    let area = {
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+        inner
+    };
+    let mut lines: Vec<Line> = vec![Line::default()];
+    let mut x = 0u16;
+    for (key, label) in hints {
+        let w = hint_width(key, label);
+        if x > 0 && x + w > area.width {
+            lines.push(Line::default());
+            x = 0;
+        }
+        let y = area.y + (lines.len() as u16 - 1);
+        if let Some(c) = hint_char(key)
+            && y < area.y + area.height
+        {
+            hits.add(Rect::new(area.x + x, y, w, 1), Hit::Key(c));
+        }
+        let line = lines.last_mut().expect("one line");
+        line.push_span(Span::styled(format!(" {key} "), theme::key()));
+        line.push_span(Span::styled(format!("{label} "), theme::help()));
+        x += w;
+    }
+    frame.render_widget(Paragraph::new(lines), area);
 }
 
 fn hint_char(key: &str) -> Option<char> {

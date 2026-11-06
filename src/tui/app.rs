@@ -23,7 +23,7 @@ use super::main_screen::MainScreen;
 use super::review::{ReviewKind, ReviewResult, ReviewScreen};
 use super::run_screen::RunScreen;
 use super::theme;
-use super::widgets::{Button, Modal, draw_help, draw_key_hints};
+use super::widgets::{Button, Modal, draw_help, draw_key_hints, key_hint_rows};
 
 use crate::cli::INSTALL_CMD;
 const RELEASES_URL: &str = "https://github.com/ReyArlena/cachyup/releases/latest";
@@ -830,10 +830,11 @@ impl App {
     fn draw(&mut self, frame: &mut ratatui::Frame) {
         self.hits.clear();
         let area = frame.area();
+        let keys = self.key_hints();
         let [bar, body, hints] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Min(3),
-            Constraint::Length(1),
+            Constraint::Length(key_hint_rows(&keys, area.width) + 2),
         ])
         .areas(area);
 
@@ -850,7 +851,6 @@ impl App {
                 }
             }
         }
-        let keys = self.key_hints();
         draw_key_hints(frame, hints, &keys, &mut self.hits);
 
         if let Some((text, when)) = &self.toast {

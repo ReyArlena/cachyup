@@ -1143,9 +1143,9 @@ impl MainScreen {
                     "─".repeat(help_area.width as usize),
                     theme::border(),
                 )),
-                Line::from(Span::styled(help, theme::help())),
+                Line::from(Span::styled(format!(" {help}"), theme::help())),
             ])
-            .wrap(Wrap { trim: true }),
+            .wrap(Wrap { trim: false }),
             help_area,
         );
     }

@@ -534,7 +534,7 @@ impl ReviewScreen {
                 None if self.info.is_empty() => "Reading package info...".into(),
                 None => "No description  (i for details)".into(),
             };
-            lines.push(Line::from(Span::styled(text, theme::help())));
+            lines.push(Line::from(Span::styled(format!(" {text}"), theme::help())));
         }
         let mut summary = format!(
             "{} ticked of {shown} shown. w adds the ticked ones to apps.toml and marks all shown as reviewed; Esc leaves everything as it was.",
@@ -547,8 +547,11 @@ impl ReviewScreen {
                 " {n} machine-specific packages (kernels, drivers, firmware, base system) are set aside; s shows them."
             ));
         }
-        lines.push(Line::from(Span::styled(summary, theme::dim())));
-        frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), help_area);
+        lines.push(Line::from(Span::styled(
+            format!(" {summary}"),
+            theme::dim(),
+        )));
+        frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), help_area);
     }
 }
 
