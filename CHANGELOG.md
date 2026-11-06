@@ -32,8 +32,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The app list says "Installed (will update)" when the full system update as configured
   would upgrade that app: the step for its source on, and for installers the Installer
   updates step, an `update` command and the app selected.
-- Settings in the task sidebar: edit the app list in your editor, add an app by name, or
-  review what could be added. Two reviews: apps installed on this machine that the list
+- A Settings box under the tasks, with the app list: edit it in your editor, add an app by
+  name, or review what could be added. Two reviews: apps installed on this machine that the list
   lacks (explicitly installed packages and flatpak apps; kernels, drivers, firmware and
   base-system packages set aside behind `s`), and entries new in cachyup. Tick, then `w`
   merges them into `apps.toml` with its layout kept (previous copy in `apps.toml.bak`)

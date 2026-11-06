@@ -42,7 +42,7 @@ impl Task {
             Task::Update => crate::engine::plan::TASK_UPDATE,
             Task::Apps => crate::engine::plan::TASK_APPS,
             Task::Tweaks => crate::engine::plan::TASK_TWEAKS,
-            Task::Settings => "Settings",
+            Task::Settings => "App list",
         }
     }
 
@@ -990,15 +990,71 @@ impl MainScreen {
         self.draw_options(frame, right, app, info, hits);
     }
 
+    /// The sidebar: a Tasks box and a Settings box, one logical pane. The
+    /// box holding the cursor gets the focused border.
     fn draw_tasks(&self, frame: &mut Frame, area: Rect, app: &AppState, hits: &mut HitMap) {
         let focused = self.focus == PANE_TASKS;
-        let block = pane_block("Tasks", focused);
+        let tasks: Vec<(usize, Task)> = Task::ALL
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, t)| t.is_task())
+            .collect();
+        let settings: Vec<(usize, Task)> = Task::ALL
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, t)| !t.is_task())
+            .collect();
+        // Three lines per entry (label, summary, blank), minus the last blank.
+        let height = |n: usize| (n * 3).saturating_sub(1) as u16 + 2;
+        let [tasks_area, settings_area] = Layout::vertical([
+            Constraint::Length(height(tasks.len())),
+            Constraint::Min(height(settings.len())),
+        ])
+        .areas(area);
+        hits.add(area, Hit::Pane(PANE_TASKS));
+        let in_settings = !Task::ALL[self.task].is_task();
+        self.draw_sidebar_box(
+            frame,
+            tasks_area,
+            "Tasks",
+            focused && !in_settings,
+            focused,
+            &tasks,
+            app,
+            hits,
+        );
+        self.draw_sidebar_box(
+            frame,
+            settings_area,
+            "Settings",
+            focused && in_settings,
+            focused,
+            &settings,
+            app,
+            hits,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn draw_sidebar_box(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        title: &str,
+        border_focused: bool,
+        pane_focused: bool,
+        entries: &[(usize, Task)],
+        app: &AppState,
+        hits: &mut HitMap,
+    ) {
+        let block = pane_block(title, border_focused);
         let inner = block.inner(area);
         frame.render_widget(block, area);
-        hits.add(area, Hit::Pane(PANE_TASKS));
 
         let mut lines = Vec::new();
-        for (i, task) in Task::ALL.iter().enumerate() {
+        for (i, task) in entries {
             let on = task.on(app);
             let (mark, style) = if !task.is_task() {
                 ("▸", theme::heading())
@@ -1011,8 +1067,8 @@ impl MainScreen {
                 Span::styled(format!(" {mark} "), style),
                 Span::styled(format!("{} ", task.label()), style),
             ]);
-            if i == self.task {
-                line = line.style(if focused {
+            if *i == self.task {
+                line = line.style(if pane_focused {
                     theme::selected()
                 } else {
                     theme::selected_inactive()
@@ -1024,7 +1080,7 @@ impl MainScreen {
                     Rect::new(inner.x, y, inner.width, 2),
                     Hit::Row {
                         pane: PANE_TASKS,
-                        index: i,
+                        index: *i,
                     },
                 );
             }
