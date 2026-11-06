@@ -254,6 +254,12 @@ impl App {
         Ok(())
     }
 
+    /// Drop an entry from apps.toml and re-read everything.
+    fn remove_app(&mut self, key: &str) -> Result<()> {
+        self.state.remove_from_apps(key)?;
+        self.reload_and_switch_on(&[])
+    }
+
     /// Re-read apps.toml and everything else, then switch the given app
     /// keys on (a reload gives new entries their default, which is off).
     fn reload_and_switch_on(&mut self, keys: &[String]) -> Result<()> {
@@ -503,6 +509,13 @@ impl App {
                 let key = tag["uninstall:".len()..].to_string();
                 self.start_uninstall(&key);
             }
+            tag if tag.starts_with("remove-app:") => {
+                let key = tag["remove-app:".len()..].to_string();
+                match self.remove_app(&key) {
+                    Ok(()) => self.toast(&format!("removed {key} from apps.toml")),
+                    Err(e) => self.toast(&format!("not removed: {e:#}")),
+                }
+            }
             "delete-run" => {
                 let effects = self.history.delete_current(&self.state.paths.runs_dir());
                 self.apply(effects);
@@ -738,7 +751,29 @@ impl App {
             return;
         };
         if self.state.is_installed(app) != Some(true) {
-            self.toast(&format!("{name} is not installed"));
+            // Nothing to uninstall. A name its source does not know is
+            // dead weight in the list: offer to drop it.
+            if self.info.get(key).and_then(|i| i.available) == Some(false) {
+                self.modal = Some(Modal::new(
+                    &format!("Remove {name} from the list?"),
+                    Modal::text(&format!(
+                        "{} has no package called {}, so it can never be installed.\n\nRemove its line from apps.toml?",
+                        app.source.label(),
+                        app.name
+                    )),
+                    vec![
+                        Button::new(
+                            &[KeyCode::Enter],
+                            "Enter",
+                            "remove",
+                            Some(&format!("remove-app:{key}")),
+                        ),
+                        Button::new(&[KeyCode::Esc, KeyCode::Char('n')], "Esc", "keep", None),
+                    ],
+                ));
+            } else {
+                self.toast(&format!("{name} is not installed"));
+            }
             return;
         }
         let cmd = cmd.display();

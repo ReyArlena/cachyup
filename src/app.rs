@@ -107,6 +107,21 @@ impl AppState {
         Ok(())
     }
 
+    /// Take one entry out of the user's apps.toml, keeping its layout. The
+    /// old file is kept as `apps.toml.bak`. The caller reloads afterwards.
+    pub fn remove_from_apps(&self, key: &str) -> Result<()> {
+        let file = self.paths.apps_file();
+        let current = std::fs::read_to_string(&file)
+            .with_context(|| format!("reading {}", file.display()))?;
+        let edited = crate::apps_edit::remove(&current, key)?;
+        if edited != current {
+            crate::paths::write_file(&file.with_extension("toml.bak"), &current)?;
+            crate::paths::write_file(&file, &edited)
+                .with_context(|| format!("writing {}", file.display()))?;
+        }
+        Ok(())
+    }
+
     pub fn plan(&self, dry: bool) -> Plan {
         build_plan(&self.catalog, &self.config, dry)
     }

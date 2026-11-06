@@ -91,6 +91,42 @@ pub fn append_where(base: &str, extra: &str, keep: impl Fn(&str) -> bool) -> Res
     Ok(doc.to_string())
 }
 
+/// `base` without the entry `key` names (`pacman/name`, `aur/name`,
+/// `flatpak/id`, `installer/name`, `tweak/id`), wherever it sits. The rest
+/// of the file is untouched. Ok even when the key is not there.
+pub fn remove(base: &str, key: &str) -> Result<String> {
+    let mut doc: DocumentMut = base.parse().context("apps.toml")?;
+    let Some((section, name)) = key.split_once('/') else {
+        anyhow::bail!("{key}: not a source/name key");
+    };
+    if LISTS.contains(&section) {
+        if let Some(list) = doc.get_mut(section).and_then(Item::as_array_mut) {
+            let mut i = 0;
+            while i < list.len() {
+                if list.get(i).and_then(list_name).as_deref() == Some(name) {
+                    list.remove(i);
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    } else if let Some((_, id)) = SECTIONS.iter().find(|(s, _)| *s == section)
+        && let Some(tables) = doc.get_mut(section).and_then(Item::as_array_of_tables_mut)
+    {
+        let mut i = 0;
+        while i < tables.len() {
+            if tables.get(i).and_then(|t| t.get(id)).and_then(Item::as_str) == Some(name) {
+                tables.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+    } else {
+        anyhow::bail!("{key}: unknown section {section}");
+    }
+    Ok(doc.to_string())
+}
+
 /// The name of a package list entry: a bare string or `{ name = ... }`.
 fn list_name(value: &Value) -> Option<String> {
     match value {
@@ -271,6 +307,19 @@ installs = [\"z\"]
         assert!(out.contains("\"b\""), "{out}");
         assert!(!out.contains("\"a\""), "{out}");
         assert!(out.contains("[[tweak]]"), "{out}");
+    }
+
+    #[test]
+    fn remove_takes_one_entry_out() {
+        let base = "pacman = [\n    \"ark\",\n    \"gone\",\n    \"zed\",\n]\n\n[[installer]]\nname = \"keep\"\ncheck = \"k\"\ninstall = \"true\"\n\n[[installer]]\nname = \"old\"\ncheck = \"o\"\ninstall = \"true\"\n";
+        let out = remove(base, "pacman/gone").unwrap();
+        assert!(!out.contains("gone"), "{out}");
+        assert!(out.contains("\"ark\",\n    \"zed\","), "{out}");
+        let out = remove(&out, "installer/old").unwrap();
+        assert!(!out.contains("old"), "{out}");
+        assert!(out.contains("name = \"keep\""), "{out}");
+        assert_eq!(remove(&out, "pacman/missing").unwrap(), out);
+        assert!(remove(base, "snap/x").is_err());
     }
 
     #[test]
