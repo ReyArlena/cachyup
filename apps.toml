@@ -201,6 +201,16 @@ install = "curl -fsSL https://releases.herdr.dev/app/install.sh | sh"
 uninstall = "rm -rf ~/.local/share/herdr-app ~/.local/bin/herdr-app ~/.local/share/applications/herdr-app.desktop ~/.local/share/icons/hicolor/scalable/apps/herdr-app.svg"
 
 [[installer]]
+name = "herdr-core"
+label = "Herdr Core"
+description = "Terminals that stay alive, with the hc command (~/.local/bin/herdr-core); the Herdr Desktop App also keeps it current"
+check = "~/.local/bin/herdr-core"
+install = "curl -fsSL https://releases.herdr.dev/core/install.sh | sh"
+update = "hc update"
+# Stop the core first; remove hc only when it is the install script's link (another tool may ship an hc).
+uninstall = "~/.local/bin/herdr-core server stop || true; if [ \"$(readlink ~/.local/bin/hc)\" = herdr-core ]; then rm -f ~/.local/bin/hc; fi; rm -f ~/.local/bin/herdr-core"
+
+[[installer]]
 name = "kiln"
 description = "Hardware burn-in and diagnostics runner (~/.local/bin/kiln)"
 check = "~/.local/bin/kiln"

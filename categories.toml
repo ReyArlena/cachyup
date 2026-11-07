@@ -33,6 +33,7 @@
     "figma-linux-next-bin",
     "herdr-bin",
     "herdr-app",
+    "herdr-core",
     "it.fabiodistasio.AntaresSQL",
     "io.github.totoshko88.RustConn",
     "claude",
