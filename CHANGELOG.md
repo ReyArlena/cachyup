@@ -9,6 +9,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - fd (pacman).
+- Herdr Desktop App (installer).
 
 ## [0.2.0] - 2026-11-06
 
