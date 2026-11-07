@@ -195,10 +195,9 @@ uninstall = "rm -rf ~/.local/bin/claude ~/.local/share/claude"
 [[installer]]
 name = "herdr-app"
 label = "Herdr Desktop App"
-description = "Desktop app for Herdr terminals and coding agents (~/.local/bin/herdr-app); adds herdr-core if missing"
+description = "Desktop app for Herdr terminals and coding agents (~/.local/bin/herdr-app); updates itself, adds herdr-core if missing"
 check = "~/.local/bin/herdr-app"
 install = "curl -fsSL https://releases.herdr.dev/app/install.sh | sh"
-update = "curl -fsSL https://releases.herdr.dev/app/install.sh | sh"
 uninstall = "rm -rf ~/.local/share/herdr-app ~/.local/bin/herdr-app ~/.local/share/applications/herdr-app.desktop ~/.local/share/icons/hicolor/scalable/apps/herdr-app.svg"
 
 [[installer]]
